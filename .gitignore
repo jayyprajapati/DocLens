@@ -1,0 +1,90 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Uvicorn / server logs
+*.log
+
+# Test / coverage
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.pytest_cache/
+
+# Mypy / type checkers
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Ruff / lint cache
+.ruff_cache/
+
+# Pyre
+.pyre/
+
+# IDEs and editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# MacOS
+.DS_Store
+
+# Windows
+Thumbs.db
+
+# SQLite databases (common in dev)
+*.sqlite3
+*.db
+
+# Temporary files
+tmp/
+temp/
+
+# Uvicorn reload artifacts
+*.reload
+
+# Logs
+logs/
+*.log
