@@ -2,13 +2,15 @@ from llm.prompts import format_question
 from services.rag_client import query as rag_query
 
 
-def run(query, user_id, app_name="doclens", doc_id=None):
+def run(query, user_id, app_name="doclens", doc_id=None, llm_config=None, base_url=None):
     formatted_query = format_question(query)
     result = rag_query(
         query=formatted_query,
         user_id=user_id,
         app_name=app_name,
         doc_id=doc_id,
+        llm_config=llm_config,
+        base_url=base_url,
     )
 
     print("\nAnswer:\n")
