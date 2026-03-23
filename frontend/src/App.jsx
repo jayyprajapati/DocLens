@@ -1,120 +1,141 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
+import { useEffect, useState } from 'react'
+import { v4 as uuidv4 } from 'uuid'
+import Header from './components/Header'
+import ChatWindow from './components/ChatWindow'
+import InputBar from './components/InputBar'
+import { ingest, query } from './services/api'
 import './App.css'
 
+const STORAGE_KEYS = {
+  userId: 'doclens_user_id',
+  apiKey: 'doclens_api_key',
+  model: 'doclens_model',
+}
+
+const DEFAULT_MODEL = 'gpt-4o-mini'
+
+function getOrCreateUserId() {
+  const existingUserId = localStorage.getItem(STORAGE_KEYS.userId)
+  if (existingUserId) {
+    return existingUserId
+  }
+
+  const newUserId = uuidv4()
+  localStorage.setItem(STORAGE_KEYS.userId, newUserId)
+  return newUserId
+}
+
 function App() {
-  const [count, setCount] = useState(0)
+  const [userId, setUserId] = useState(() => getOrCreateUserId())
+  const [apiKey, setApiKey] = useState(
+    () => localStorage.getItem(STORAGE_KEYS.apiKey) || '',
+  )
+  const [model, setModel] = useState(
+    () => localStorage.getItem(STORAGE_KEYS.model) || DEFAULT_MODEL,
+  )
+  const [messages, setMessages] = useState([])
+  const [isSending, setIsSending] = useState(false)
+  const [isUploading, setIsUploading] = useState(false)
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.apiKey, apiKey)
+  }, [apiKey])
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.model, model)
+  }, [model])
+
+  const addMessage = (message) => {
+    setMessages((previousMessages) => [...previousMessages, message])
+  }
+
+  const handleSend = async (text) => {
+    if (!text.trim() || isSending) {
+      return
+    }
+
+    addMessage({
+      id: uuidv4(),
+      role: 'user',
+      content: text,
+    })
+
+    setIsSending(true)
+    try {
+      const result = await query(text, userId, apiKey, model)
+      addMessage({
+        id: uuidv4(),
+        role: 'assistant',
+        content:
+          result?.answer || result?.response || result?.message || 'No response returned.',
+        sources: Array.isArray(result?.sources) ? result.sources : [],
+      })
+    } catch (error) {
+      addMessage({
+        id: uuidv4(),
+        role: 'assistant',
+        content: `Request failed: ${error.message}`,
+        sources: [],
+      })
+    } finally {
+      setIsSending(false)
+    }
+  }
+
+  const handleUpload = async (file) => {
+    if (!file || isUploading) {
+      return
+    }
+
+    setIsUploading(true)
+    try {
+      await ingest(file, userId)
+      addMessage({
+        id: uuidv4(),
+        role: 'assistant',
+        content: `Uploaded **${file.name}** successfully.`,
+        sources: [],
+      })
+    } catch (error) {
+      addMessage({
+        id: uuidv4(),
+        role: 'assistant',
+        content: `Upload failed for **${file.name}**: ${error.message}`,
+        sources: [],
+      })
+    } finally {
+      setIsUploading(false)
+    }
+  }
+
+  const handleReset = () => {
+    localStorage.clear()
+    const newUserId = uuidv4()
+    localStorage.setItem(STORAGE_KEYS.userId, newUserId)
+    setUserId(newUserId)
+    setApiKey('')
+    setModel(DEFAULT_MODEL)
+    setMessages([])
+  }
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.jsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
-
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
+    <div className="app-shell">
+      <Header
+        apiKey={apiKey}
+        model={model}
+        onApiKeyChange={setApiKey}
+        onModelChange={setModel}
+        onReset={handleReset}
+      />
+      <ChatWindow messages={messages} isSending={isSending} />
+      <InputBar
+        onSend={handleSend}
+        onUpload={handleUpload}
+        isSending={isSending}
+        isUploading={isUploading}
+      />
+      <div className="session-id">Session: {userId}</div>
+    </div>
   )
 }
 
