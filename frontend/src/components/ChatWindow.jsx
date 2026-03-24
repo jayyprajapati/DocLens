@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { motion } from 'framer-motion'
-import { FileText, MessageCircle, Paperclip } from 'lucide-react'
+import { KeyRound, MessageCircle, Paperclip, Sparkles } from 'lucide-react'
 import MessageBubble from './MessageBubble'
 
 function ChatWindow({ messages, isSending }) {
@@ -14,26 +14,33 @@ function ChatWindow({ messages, isSending }) {
     <main className="chat-window">
       {messages.length === 0 && (
         <div className="empty-state">
-          <h2 className="empty-tagline">Ask your docs anything, get grounded answers.</h2>
-          <p className="empty-subtitle">Attach one file and start a focused conversation.</p>
+          <h2 className="empty-tagline">DocLens: focused AI chat for documents</h2>
+          <p className="empty-subtitle">Upload once, ask clearly, and get grounded answers.</p>
 
-          <div className="empty-guide" role="list" aria-label="How to get started">
-            <div className="empty-guide-item" role="listitem">
-              <Paperclip size={15} aria-hidden="true" />
-              <span>Attach one document from the input bar.</span>
+          <div className="empty-feature-row" role="list" aria-label="Core features">
+            <div className="empty-feature-item" role="listitem">
+              <Paperclip size={16} aria-hidden="true" />
+              <span>Document Upload</span>
             </div>
-            <div className="empty-guide-item" role="listitem">
-              <FileText size={15} aria-hidden="true" />
-              <span>Wait for processing confirmation.</span>
+            <div className="empty-feature-item" role="listitem">
+              <MessageCircle size={16} aria-hidden="true" />
+              <span>Context Chat</span>
             </div>
-            <div className="empty-guide-item" role="listitem">
-              <MessageCircle size={15} aria-hidden="true" />
-              <span>Ask specific questions to get better responses.</span>
+            <div className="empty-feature-item" role="listitem">
+              <Sparkles size={16} aria-hidden="true" />
+              <span>Source-Aware Answers</span>
             </div>
           </div>
 
-          <div className="empty-constraints" aria-label="Usage limits">
-            Max 2 queries, 1 document, up to 3 pages.
+          <div className="empty-restriction-row" role="list" aria-label="Free tier limits">
+            <span role="listitem">Max 1 document</span>
+            <span role="listitem">Max 3 pages</span>
+            <span role="listitem">Max 2 free questions</span>
+          </div>
+
+          <div className="empty-constraints" aria-label="BYOK note">
+            <KeyRound size={14} aria-hidden="true" />
+            <span>BYOK model access expands usage with fewer practical limits.</span>
           </div>
         </div>
       )}

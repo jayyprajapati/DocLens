@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Info, KeyRound } from 'lucide-react'
+import { Files, Info, KeyRound } from 'lucide-react'
 import InfoModal from './InfoModal'
 
 const MODEL_OPTIONS = ['gpt-4o-mini', 'gpt-4o', 'gpt-4.1-mini']
@@ -9,8 +9,8 @@ function Header({ apiKey, model, onApiKeyChange, onModelChange, onReset }) {
 
   const closeModal = () => setActiveModal(null)
 
-  const handleReset = () => {
-    onReset()
+  const handleReset = async () => {
+    await onReset()
     closeModal()
   }
 
@@ -18,73 +18,72 @@ function Header({ apiKey, model, onApiKeyChange, onModelChange, onReset }) {
     <>
       <header className="header">
         <div className="title-wrap">
-          <h1 className="title">DocLens</h1>
+          <h1 className="title">
+            <Files className="title-icon" size={20} aria-hidden="true" />
+            <span>DocLens</span>
+          </h1>
           <p className="title-subtitle">A focused workspace for document-grounded chat</p>
         </div>
 
-        <div className="header-controls">
-          <div className="field-group key-group">
-            <label className="field-label" htmlFor="api-key-input">
-              <KeyRound size={14} aria-hidden="true" />
-              <span>API key</span>
-              <button
-                type="button"
-                className="icon-button icon-info"
-                onClick={() => setActiveModal('byok')}
-                aria-label="What is BYOK?"
-              >
-                <Info size={14} />
-              </button>
-            </label>
-            <input
-              id="api-key-input"
-              className="input input-key"
-              type="password"
-              value={apiKey}
-              placeholder="Enter your OpenAI key"
-              onChange={(event) => onApiKeyChange(event.target.value)}
-            />
-          </div>
+        <div className="header-main-controls">
+          <div className="byok-section" aria-label="BYOK model section">
+            <div className="byok-title">BYOK Model</div>
 
-          <div className="field-group">
-            <label className="field-label" htmlFor="model-select">
-              <span>Model</span>
-              <button
-                type="button"
-                className="icon-button icon-info"
-                onClick={() => setActiveModal('model')}
-                aria-label="Model information"
-              >
-                <Info size={14} />
-              </button>
-            </label>
-            <select
-              id="model-select"
-              className="input input-model"
-              value={model}
-              onChange={(event) => onModelChange(event.target.value)}
-            >
-              {MODEL_OPTIONS.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-            </select>
-          </div>
+            <div className="header-controls byok-controls">
+              <div className="field-group key-group">
+                <label className="field-label" htmlFor="api-key-input">
+                  <KeyRound size={15} aria-hidden="true" />
+                  <span>Ollama key</span>
+                  <button
+                    type="button"
+                    className="icon-button icon-info"
+                    onClick={() => setActiveModal('byok')}
+                    aria-label="What is BYOK?"
+                  >
+                    <Info size={18} />
+                  </button>
+                </label>
+                <input
+                  id="api-key-input"
+                  className="input input-key"
+                  type="password"
+                  value={apiKey}
+                  placeholder="Enter your Ollama key"
+                  onChange={(event) => onApiKeyChange(event.target.value)}
+                />
+              </div>
 
-          <div className="field-group field-reset">
-            <div className="field-label field-label-reset">
-              <span>Session</span>
-              <button
-                type="button"
-                className="icon-button icon-info"
-                onClick={() => setActiveModal('reset')}
-                aria-label="Reset details"
-              >
-                <Info size={14} />
-              </button>
+              <div className="field-group">
+                <label className="field-label" htmlFor="model-select">
+                  <span>Model</span>
+                  <button
+                    type="button"
+                    className="icon-button icon-info"
+                    onClick={() => setActiveModal('model')}
+                    aria-label="Model information"
+                  >
+                    <Info size={18} />
+                  </button>
+                </label>
+                <select
+                  id="model-select"
+                  className="input input-model"
+                  value={model}
+                  onChange={(event) => onModelChange(event.target.value)}
+                >
+                  <option value="">Select model</option>
+                  {MODEL_OPTIONS.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
-            <button type="button" className="button button-text" onClick={onReset}>
+          </div>
+
+          <div className="header-reset-wrap">
+            <button type="button" className="button button-reset" onClick={() => setActiveModal('reset')}>
               Reset
             </button>
           </div>
@@ -123,7 +122,7 @@ function Header({ apiKey, model, onApiKeyChange, onModelChange, onReset }) {
         onClose={closeModal}
         title="Reset Session"
         footer={
-          <button type="button" className="button button-modal" onClick={handleReset}>
+          <button type="button" className="button button-reset" onClick={handleReset}>
             Reset now
           </button>
         }

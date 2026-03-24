@@ -65,3 +65,32 @@ export async function generate(prompt) {
 
   return parseResponse(response)
 }
+
+export async function deleteDocument(userId, docId) {
+  const response = await fetch(`${API_BASE_URL}/delete`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      user_id: userId,
+      doc_id: docId,
+    }),
+  })
+
+  return parseResponse(response)
+}
+
+export async function deleteAllDocuments(userId) {
+  const response = await fetch(`${API_BASE_URL}/delete_all`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      user_id: userId,
+    }),
+  })
+
+  return parseResponse(response)
+}

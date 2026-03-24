@@ -3,7 +3,8 @@ import { v4 as uuidv4 } from 'uuid'
 import Header from './components/Header'
 import ChatWindow from './components/ChatWindow'
 import InputBar from './components/InputBar'
-import { ingest, query } from './services/api'
+import InfoModal from './components/InfoModal'
+import { deleteAllDocuments, deleteDocument, ingest, query } from './services/api'
 import './App.css'
 
 const STORAGE_KEYS = {
@@ -12,7 +13,7 @@ const STORAGE_KEYS = {
   model: 'doclens_model',
 }
 
-const DEFAULT_MODEL = 'gpt-4o-mini'
+const DEFAULT_MODEL = ''
 
 function parseErrorMessage(rawMessage) {
   if (!rawMessage) {
@@ -68,6 +69,25 @@ function getDocumentTypeMeta(fileName) {
   return { label: 'FILE', className: 'type-generic' }
 }
 
+function getDocumentIdFromIngestResponse(payload) {
+  if (!payload || typeof payload !== 'object') {
+    return null
+  }
+
+  const nestedResult = payload.result && typeof payload.result === 'object' ? payload.result : null
+  const candidates = [
+    payload.doc_id,
+    payload.document_id,
+    payload.id,
+    nestedResult?.doc_id,
+    nestedResult?.document_id,
+    nestedResult?.id,
+  ]
+
+  const docId = candidates.find((candidate) => typeof candidate === 'string' && candidate.trim())
+  return docId || null
+}
+
 function getOrCreateUserId() {
   const existingUserId = localStorage.getItem(STORAGE_KEYS.userId)
   if (existingUserId) {
@@ -91,6 +111,8 @@ function App() {
   const [documents, setDocuments] = useState([])
   const [isSending, setIsSending] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
+  const [documentPendingDeletion, setDocumentPendingDeletion] = useState(null)
+  const [isDeletingDocument, setIsDeletingDocument] = useState(false)
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.apiKey, apiKey)
@@ -158,13 +180,24 @@ function App() {
     })
 
     try {
-      await ingest(file, userId)
+      const ingestResult = await ingest(file, userId)
+      const docId = getDocumentIdFromIngestResponse(ingestResult)
+
+      if (!docId) {
+        addMessage({
+          id: uuidv4(),
+          role: 'system',
+          tone: 'error',
+          content: 'Upload succeeded but document identifier is unavailable. Please re-upload before deletion actions.',
+        })
+      }
 
       const typeMeta = getDocumentTypeMeta(file.name)
       setDocuments((previousDocuments) => [
         ...previousDocuments,
         {
           id: uuidv4(),
+          docId,
           name: file.name,
           typeLabel: typeMeta.label,
           typeClassName: typeMeta.className,
@@ -189,7 +222,18 @@ function App() {
     }
   }
 
-  const handleReset = () => {
+  const handleReset = async () => {
+    try {
+      await deleteAllDocuments(userId)
+    } catch (error) {
+      addMessage({
+        id: uuidv4(),
+        role: 'system',
+        tone: 'warning',
+        content: `Reset warning: remote cleanup did not fully complete. ${parseErrorMessage(error?.message)}`,
+      })
+    }
+
     localStorage.clear()
     const newUserId = uuidv4()
     localStorage.setItem(STORAGE_KEYS.userId, newUserId)
@@ -198,12 +242,55 @@ function App() {
     setModel(DEFAULT_MODEL)
     setMessages([])
     setDocuments([])
+    setDocumentPendingDeletion(null)
   }
 
-  const handleRemoveDocument = (documentId) => {
-    setDocuments((previousDocuments) =>
-      previousDocuments.filter((document) => document.id !== documentId),
-    )
+  const handleRequestRemoveDocument = (document) => {
+    setDocumentPendingDeletion(document)
+  }
+
+  const handleConfirmRemoveDocument = async () => {
+    if (!documentPendingDeletion || isDeletingDocument) {
+      return
+    }
+
+    if (!documentPendingDeletion.docId) {
+      setDocuments((previousDocuments) =>
+        previousDocuments.filter((document) => document.id !== documentPendingDeletion.id),
+      )
+      addMessage({
+        id: uuidv4(),
+        role: 'system',
+        tone: 'warning',
+        content: `Removed ${documentPendingDeletion.name} locally. Server-side deletion could not be verified.`,
+      })
+      setDocumentPendingDeletion(null)
+      return
+    }
+
+    setIsDeletingDocument(true)
+    try {
+      await deleteDocument(userId, documentPendingDeletion.docId)
+      setDocuments((previousDocuments) =>
+        previousDocuments.filter((document) => document.id !== documentPendingDeletion.id),
+      )
+      addMessage({
+        id: uuidv4(),
+        role: 'system',
+        tone: 'success',
+        content: `Document deleted: ${documentPendingDeletion.name}`,
+      })
+    } catch (error) {
+      addMessage({
+        id: uuidv4(),
+        role: 'system',
+        tone: 'error',
+        content: `Could not delete ${documentPendingDeletion.name}. ${parseErrorMessage(error?.message)}`,
+      })
+    } finally {
+      setIsDeletingDocument(false)
+      setDocumentPendingDeletion(null)
+    }
   }
 
   const hasConversation = messages.length > 0
@@ -225,7 +312,7 @@ function App() {
           isSending={isSending}
           isUploading={isUploading}
           documents={documents}
-          onRemoveDocument={handleRemoveDocument}
+          onRequestRemoveDocument={handleRequestRemoveDocument}
           userId={userId}
         />
 
@@ -234,6 +321,29 @@ function App() {
             Free usage limits: max 2 queries, max 1 document, max 3 pages.
           </div>
         )}
+
+        <InfoModal
+          isOpen={Boolean(documentPendingDeletion)}
+          onClose={() => {
+            if (!isDeletingDocument) {
+              setDocumentPendingDeletion(null)
+            }
+          }}
+          title="Delete document"
+          footer={
+            <button
+              type="button"
+              className="button button-danger"
+              onClick={handleConfirmRemoveDocument}
+              disabled={isDeletingDocument}
+            >
+              {isDeletingDocument ? 'Deleting...' : 'Delete permanently'}
+            </button>
+          }
+        >
+          <p>This will permanently delete your document. Continue?</p>
+          {documentPendingDeletion?.name && <p><strong>{documentPendingDeletion.name}</strong></p>}
+        </InfoModal>
       </div>
     </div>
   )

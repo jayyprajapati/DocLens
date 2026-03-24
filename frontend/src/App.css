@@ -16,7 +16,7 @@
 .app-page {
   min-height: 100svh;
   padding: 8px;
-  background: var(--page-bg);
+  background: #fdfaf6;
 }
 
 .app-shell {
@@ -53,12 +53,19 @@
 
 .title {
   margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   font-family: 'Fraunces', 'Times New Roman', serif;
   font-size: 30px;
   line-height: 1;
   font-weight: 700;
   letter-spacing: 0.01em;
   color: #162030;
+}
+
+.title-icon {
+  color: #2f86af;
 }
 
 .title-subtitle {
@@ -69,9 +76,50 @@
 
 .header-controls {
   display: flex;
-  align-items: flex-end;
+  align-items: flex-start;
   gap: 10px;
   flex-wrap: wrap;
+}
+
+.header-main-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.byok-section {
+  display: flex;
+  align-items: stretch;
+  gap: 12px;
+  border: 1px solid #e5ecf5;
+  border-radius: 8px;
+  padding: 10px;
+  background: #fff;
+}
+
+.byok-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #4e6680;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin-bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 10px 0 2px;
+  border-right: 1px solid #e8eef6;
+  white-space: nowrap;
+}
+
+.byok-controls {
+  align-items: flex-end;
+}
+
+.header-reset-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .field-group {
@@ -148,6 +196,19 @@
   cursor: not-allowed;
 }
 
+.button-reset {
+  border-color: #efc9c9;
+  background: transparent;
+  color: #b46868;
+  font-weight: 500;
+}
+
+.button-reset:hover {
+  border-color: #e59e9e;
+  background: #eb9b9b;
+  color: #fff;
+}
+
 .button-text {
   border: none;
   background: transparent;
@@ -197,10 +258,10 @@
 }
 
 .icon-info {
-  width: 20px;
-  height: 20px;
+  width: 26px;
+  height: 26px;
   border: none;
-  color: #85a4bf;
+  color: #7398b7;
 }
 
 .chat-window {
@@ -236,26 +297,59 @@
   font-size: 15px;
 }
 
-.empty-guide {
-  margin: 8px auto 0;
-  display: grid;
-  gap: 8px;
-  width: min(540px, 100%);
-}
-
-.empty-guide-item {
-  display: inline-flex;
+.empty-feature-row {
+  margin: 10px auto 0;
+  display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  color: #3e5f7f;
-  font-size: 14px;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.empty-feature-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #2f5e83;
+  background: #f3fafe;
+  border: 1px solid #d7eaf6;
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.empty-restriction-row {
+  margin: 10px auto 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  flex-wrap: wrap;
+  color: #b06f73;
+  font-size: 13px;
+}
+
+.empty-restriction-row span {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 2px;
+}
+
+.empty-restriction-row span + span::before {
+  content: '•';
+  color: #d4a2a4;
+  margin: 0 7px;
 }
 
 .empty-constraints {
-  margin-top: 4px;
+  margin-top: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   font-size: 13px;
-  color: #6784a2;
+  color: #5f7690;
 }
 
 .system-message {
@@ -299,6 +393,14 @@
 
 .system-message.system-error::before {
   background: #e6a1a1;
+}
+
+.system-message.system-warning {
+  color: #8e6f24;
+}
+
+.system-message.system-warning::before {
+  background: #e6cd8d;
 }
 
 .system-thinking {
@@ -551,8 +653,8 @@
 }
 
 .attachment-remove {
-  flex: 0 0 28px;
-  width: 28px;
+  flex: 0 0 auto;
+  min-width: 64px;
   border: none;
   border-left: 1px solid #d4e7f3;
   background: transparent;
@@ -561,6 +663,9 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 0 10px;
 }
 
 .attachment-remove:hover {
@@ -729,15 +834,37 @@
     justify-content: stretch;
   }
 
-  .field-group,
-  .field-reset,
-  .key-group {
+  .header-main-controls {
     width: 100%;
+    flex-direction: column;
     align-items: stretch;
   }
 
-  .field-label-reset {
+  .header-reset-wrap {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .byok-section {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .byok-title {
     justify-content: flex-start;
+    border-right: none;
+    border-bottom: 1px solid #e8eef6;
+    padding: 0 0 8px;
+  }
+
+  .byok-controls {
+    width: 100%;
+  }
+
+  .field-group,
+  .key-group {
+    width: 100%;
+    align-items: stretch;
   }
 
   .input-key,

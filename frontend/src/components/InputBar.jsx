@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { Paperclip, SendHorizontal, X } from 'lucide-react'
+import { Paperclip, SendHorizontal } from 'lucide-react'
 
 function InputBar({
   onSend,
@@ -7,7 +7,7 @@ function InputBar({
   isSending,
   isUploading,
   documents = [],
-  onRemoveDocument = () => {},
+  onRequestRemoveDocument = () => {},
   userId = '',
 }) {
   const [value, setValue] = useState('')
@@ -83,9 +83,9 @@ function InputBar({
                   type="button"
                   className="attachment-remove"
                   aria-label={`Remove ${document.name}`}
-                  onClick={() => onRemoveDocument(document.id)}
+                  onClick={() => onRequestRemoveDocument(document)}
                 >
-                  <X size={14} />
+                  Remove
                 </button>
               </div>
             ))}
