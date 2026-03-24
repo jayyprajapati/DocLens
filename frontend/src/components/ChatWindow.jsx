@@ -1,4 +1,6 @@
 import { useEffect, useRef } from 'react'
+import { motion } from 'framer-motion'
+import { FileText, MessageCircle, Paperclip } from 'lucide-react'
 import MessageBubble from './MessageBubble'
 
 function ChatWindow({ messages, isSending }) {
@@ -11,7 +13,29 @@ function ChatWindow({ messages, isSending }) {
   return (
     <main className="chat-window">
       {messages.length === 0 && (
-        <div className="empty-state">Upload a file, then ask a question about its contents.</div>
+        <div className="empty-state">
+          <h2 className="empty-tagline">Ask your docs anything, get grounded answers.</h2>
+          <p className="empty-subtitle">Attach one file and start a focused conversation.</p>
+
+          <div className="empty-guide" role="list" aria-label="How to get started">
+            <div className="empty-guide-item" role="listitem">
+              <Paperclip size={15} aria-hidden="true" />
+              <span>Attach one document from the input bar.</span>
+            </div>
+            <div className="empty-guide-item" role="listitem">
+              <FileText size={15} aria-hidden="true" />
+              <span>Wait for processing confirmation.</span>
+            </div>
+            <div className="empty-guide-item" role="listitem">
+              <MessageCircle size={15} aria-hidden="true" />
+              <span>Ask specific questions to get better responses.</span>
+            </div>
+          </div>
+
+          <div className="empty-constraints" aria-label="Usage limits">
+            Max 2 queries, 1 document, up to 3 pages.
+          </div>
+        </div>
       )}
 
       {messages.map((message) => (
@@ -19,8 +43,15 @@ function ChatWindow({ messages, isSending }) {
       ))}
 
       {isSending && (
-        <div className="message-row assistant">
-          <div className="message-bubble assistant typing">Thinking...</div>
+        <div className="system-message system-ack system-thinking" aria-live="polite">
+          <span>Thinking through your document context</span>
+          <motion.span
+            className="thinking-dots"
+            animate={{ opacity: [0.25, 1, 0.25] }}
+            transition={{ duration: 1.1, repeat: Infinity, ease: 'easeInOut' }}
+          >
+            ...
+          </motion.span>
         </div>
       )}
 

@@ -1,6 +1,15 @@
 import { useRef, useState } from 'react'
+import { Paperclip, SendHorizontal, X } from 'lucide-react'
 
-function InputBar({ onSend, onUpload, isSending, isUploading }) {
+function InputBar({
+  onSend,
+  onUpload,
+  isSending,
+  isUploading,
+  documents = [],
+  onRemoveDocument = () => {},
+  userId = '',
+}) {
   const [value, setValue] = useState('')
   const fileInputRef = useRef(null)
   const textareaRef = useRef(null)
@@ -56,17 +65,35 @@ function InputBar({ onSend, onUpload, isSending, isUploading }) {
 
   return (
     <div className="input-bar">
-      <textarea
-        ref={textareaRef}
-        value={value}
-        rows={1}
-        className="chat-input"
-        placeholder="Ask something about your docs..."
-        onChange={handleChange}
-        onKeyDown={handleKeyDown}
-      />
+      {documents.length > 0 && (
+        <div className="composer-docs" aria-label="Attached documents">
+          <div className="composer-docs-title">
+            <Paperclip size={14} aria-hidden="true" />
+            <span>{documents.length} attachment{documents.length > 1 ? 's' : ''}</span>
+          </div>
 
-      <div className="input-actions">
+          <div className="attachment-list">
+            {documents.map((document) => (
+              <div className="attachment-card" key={document.id}>
+                <div className={`attachment-type ${document.typeClassName}`}>{document.typeLabel}</div>
+                <div className="attachment-name" title={document.name}>
+                  {document.name}
+                </div>
+                <button
+                  type="button"
+                  className="attachment-remove"
+                  aria-label={`Remove ${document.name}`}
+                  onClick={() => onRemoveDocument(document.id)}
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="composer">
         <input
           ref={fileInputRef}
           type="file"
@@ -77,16 +104,49 @@ function InputBar({ onSend, onUpload, isSending, isUploading }) {
 
         <button
           type="button"
-          className="button"
+          className="icon-button composer-button"
           onClick={handleUploadClick}
           disabled={isUploading}
+          aria-label="Upload document"
+          title="Upload document"
         >
-          {isUploading ? 'Uploading...' : 'Upload'}
+          <Paperclip size={16} />
         </button>
 
-        <button type="button" className="button button-primary" onClick={submit} disabled={isSending}>
-          {isSending ? 'Sending...' : 'Send'}
+        <textarea
+          ref={textareaRef}
+          value={value}
+          rows={1}
+          className="chat-input"
+          placeholder="Ask something about your docs..."
+          onChange={handleChange}
+          onKeyDown={handleKeyDown}
+          disabled={isSending}
+        />
+
+        <button
+          type="button"
+          className="icon-button composer-button composer-send"
+          onClick={submit}
+          disabled={isSending || !value.trim()}
+          aria-label="Send message"
+          title="Send"
+        >
+          <SendHorizontal size={16} />
         </button>
+      </div>
+
+      <div className="composer-meta" aria-live="polite">
+        <div className="composer-hint">
+          {isUploading
+            ? 'Uploading document and preparing retrieval context...'
+            : isSending
+              ? 'Retrieving relevant chunks and preparing answer...'
+              : 'Enter for send message, Shift + Enter for a new line.'}
+        </div>
+        <div className="composer-user-id" title={userId}>
+          User ID: {userId}
+        </div>
       </div>
     </div>
   )
