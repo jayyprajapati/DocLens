@@ -185,7 +185,7 @@ function App() {
     })
 
     try {
-      const ingestResult = await ingest(file, userId)
+      const ingestResult = await ingest(file, userId, apiKey)
       const docId = getDocumentIdFromIngestResponse(ingestResult)
 
       if (!docId) {
@@ -229,7 +229,7 @@ function App() {
 
   const handleReset = async () => {
     try {
-      await deleteAllDocuments(userId)
+      await deleteAllDocuments(userId, apiKey)
     } catch (error) {
       addMessage({
         id: uuidv4(),
@@ -275,7 +275,7 @@ function App() {
 
     setIsDeletingDocument(true)
     try {
-      await deleteDocument(userId, documentPendingDeletion.docId)
+      await deleteDocument(userId, documentPendingDeletion.docId, apiKey)
       setDocuments((previousDocuments) =>
         previousDocuments.filter((document) => document.id !== documentPendingDeletion.id),
       )

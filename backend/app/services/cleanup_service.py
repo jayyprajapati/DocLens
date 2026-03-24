@@ -4,7 +4,7 @@ import logging
 import requests
 
 from app.services.delete_service import run_delete
-from app.services.document_registry import list_expired_documents, remove_document
+from app.services.policy_state import get_expired_documents, remove_document
 
 
 LOGGER = logging.getLogger(__name__)
@@ -14,7 +14,7 @@ CLEANUP_INTERVAL_SECONDS = 60 * 60
 
 
 async def run_cleanup_once():
-    expired_docs = await asyncio.to_thread(list_expired_documents, DOC_EXPIRY_HOURS)
+    expired_docs = get_expired_documents(DOC_EXPIRY_HOURS * 60 * 60)
 
     if not expired_docs:
         return

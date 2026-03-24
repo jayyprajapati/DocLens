@@ -41,10 +41,13 @@ export async function query(query, userId, apiKey, model) {
   return parseResponse(response)
 }
 
-export async function ingest(file, userId) {
+export async function ingest(file, userId, apiKey) {
   const formData = new FormData()
   formData.append('file', file)
   formData.append('user_id', userId)
+  if (apiKey?.trim()) {
+    formData.append('api_key', apiKey.trim())
+  }
 
   const response = await fetch(`${API_BASE_URL}/ingest`, {
     method: 'POST',
@@ -66,30 +69,42 @@ export async function generate(prompt) {
   return parseResponse(response)
 }
 
-export async function deleteDocument(userId, docId) {
+export async function deleteDocument(userId, docId, apiKey) {
+  const body = {
+    user_id: userId,
+    doc_id: docId,
+  }
+
+  if (apiKey?.trim()) {
+    body.api_key = apiKey.trim()
+  }
+
   const response = await fetch(`${API_BASE_URL}/delete`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
-      user_id: userId,
-      doc_id: docId,
-    }),
+    body: JSON.stringify(body),
   })
 
   return parseResponse(response)
 }
 
-export async function deleteAllDocuments(userId) {
+export async function deleteAllDocuments(userId, apiKey) {
+  const body = {
+    user_id: userId,
+  }
+
+  if (apiKey?.trim()) {
+    body.api_key = apiKey.trim()
+  }
+
   const response = await fetch(`${API_BASE_URL}/delete_all`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
-      user_id: userId,
-    }),
+    body: JSON.stringify(body),
   })
 
   return parseResponse(response)
