@@ -57,6 +57,33 @@ def ingest(file_path, user_id, app_name="doclens", base_url=None, timeout=120):
     return response.json()
 
 
+def delete_document(user_id, doc_id, app_name="doclens", base_url=None, timeout=60):
+    endpoint = (base_url or DEFAULT_RAG_API_BASE_URL).rstrip("/") + "/delete"
+
+    payload = {
+        "user_id": user_id,
+        "doc_id": doc_id,
+        "app_name": app_name,
+    }
+
+    response = requests.post(endpoint, json=payload, timeout=timeout)
+    response.raise_for_status()
+    return response.json()
+
+
+def delete_all_documents(user_id, app_name="doclens", base_url=None, timeout=60):
+    endpoint = (base_url or DEFAULT_RAG_API_BASE_URL).rstrip("/") + "/delete_all"
+
+    payload = {
+        "user_id": user_id,
+        "app_name": app_name,
+    }
+
+    response = requests.post(endpoint, json=payload, timeout=timeout)
+    response.raise_for_status()
+    return response.json()
+
+
 def generate(prompt, model=None, api_key=None, base_url=None, timeout=60):
     endpoint = (base_url or DEFAULT_RAG_API_BASE_URL).rstrip("/") + "/generate"
 

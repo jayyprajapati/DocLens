@@ -95,6 +95,37 @@ Request body:
 
 Uses backend `DEFAULT_MODEL` when forwarding.
 
+### `POST /delete`
+
+Request body:
+
+```json
+{
+  "user_id": "user-123",
+  "doc_id": "doc-abc"
+}
+```
+
+Deletes a single document by forwarding to upstream `/delete`.
+
+### `POST /delete_all`
+
+Request body:
+
+```json
+{
+  "user_id": "user-123"
+}
+```
+
+Deletes all user documents by forwarding to upstream `/delete_all`.
+
+## Automatic Document Expiry
+
+- Uploaded documents are tracked in a local registry (`backend/app/data/document_registry.json`).
+- Backend runs an hourly cleanup task.
+- Documents older than 24 hours are deleted automatically via upstream `/delete`.
+
 ## Debugging
 
 ### Start with verbose logs
