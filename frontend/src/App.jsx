@@ -189,12 +189,7 @@ function App() {
       const docId = getDocumentIdFromIngestResponse(ingestResult)
 
       if (!docId) {
-        addMessage({
-          id: uuidv4(),
-          role: 'system',
-          tone: 'error',
-          content: 'Upload succeeded but document identifier is unavailable. Please re-upload before deletion actions.',
-        })
+        throw new Error('Upload response missing document identifier.')
       }
 
       const typeMeta = getDocumentTypeMeta(file.name)
@@ -202,8 +197,9 @@ function App() {
         ...previousDocuments,
         {
           id: uuidv4(),
-          docId,
+          doc_id: docId,
           name: file.name,
+          status: 'uploaded',
           typeLabel: typeMeta.label,
           typeClassName: typeMeta.className,
         },
@@ -213,7 +209,7 @@ function App() {
         id: uuidv4(),
         role: 'system',
         tone: 'success',
-        content: `Uploaded successfully: ${file.name}`,
+        content: 'Document uploaded successfully',
       })
     } catch (error) {
       addMessage({
@@ -251,6 +247,17 @@ function App() {
   }
 
   const handleRequestRemoveDocument = (document) => {
+    if (!document?.doc_id) {
+      console.error('Delete blocked: missing doc_id for document', document)
+      addMessage({
+        id: uuidv4(),
+        role: 'system',
+        tone: 'error',
+        content: 'Failed to delete document. Please try again.',
+      })
+      return
+    }
+
     setDocumentPendingDeletion(document)
   }
 
@@ -259,15 +266,13 @@ function App() {
       return
     }
 
-    if (!documentPendingDeletion.docId) {
-      setDocuments((previousDocuments) =>
-        previousDocuments.filter((document) => document.id !== documentPendingDeletion.id),
-      )
+    if (!documentPendingDeletion.doc_id) {
+      console.error('Delete blocked: missing doc_id for pending deletion', documentPendingDeletion)
       addMessage({
         id: uuidv4(),
         role: 'system',
-        tone: 'warning',
-        content: `Removed ${documentPendingDeletion.name} locally. Server-side deletion could not be verified.`,
+        tone: 'error',
+        content: 'Failed to delete document. Please try again.',
       })
       setDocumentPendingDeletion(null)
       return
@@ -275,7 +280,7 @@ function App() {
 
     setIsDeletingDocument(true)
     try {
-      await deleteDocument(userId, documentPendingDeletion.docId, apiKey)
+      await deleteDocument(userId, documentPendingDeletion.doc_id, apiKey)
       setDocuments((previousDocuments) =>
         previousDocuments.filter((document) => document.id !== documentPendingDeletion.id),
       )
@@ -290,7 +295,7 @@ function App() {
         id: uuidv4(),
         role: 'system',
         tone: 'error',
-        content: `Could not delete ${documentPendingDeletion.name}. ${parseErrorMessage(error?.message)}`,
+        content: 'Failed to delete document. Please try again.',
       })
     } finally {
       setIsDeletingDocument(false)

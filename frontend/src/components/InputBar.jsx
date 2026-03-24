@@ -83,6 +83,8 @@ function InputBar({
                   type="button"
                   className="attachment-remove"
                   aria-label={`Remove ${document.name}`}
+                  disabled={!document.doc_id}
+                  title={document.doc_id ? `Remove ${document.name}` : 'Cannot delete document without identifier'}
                   onClick={() => onRequestRemoveDocument(document)}
                 >
                   Remove

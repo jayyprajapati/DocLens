@@ -6,7 +6,7 @@ import requests
 from fastapi import APIRouter, File, Form, UploadFile
 from fastapi.responses import JSONResponse
 from pypdf import PdfReader
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.services.delete_service import run_delete, run_delete_all
 from app.services.generate_service import run_generate
@@ -43,13 +43,13 @@ class GenerateRequest(BaseModel):
 
 
 class DeleteRequest(BaseModel):
-    user_id: str
-    doc_id: str
+    user_id: str = Field(min_length=1)
+    doc_id: str = Field(min_length=1)
     api_key: str | None = None
 
 
 class DeleteAllRequest(BaseModel):
-    user_id: str
+    user_id: str = Field(min_length=1)
     api_key: str | None = None
 
 
@@ -232,25 +232,25 @@ async def ingest_endpoint(file: UploadFile = File(...), user_id: str = Form(...)
                     extra={"page_count": page_count, "max_pages": FREE_MAX_PAGES},
                 )
 
-        start = time.perf_counter()
-
         result = run_ingest(
             file_path=temp_path,
             user_id=user_id,
             app_name="doclens",
         )
-        elapsed_ms = (time.perf_counter() - start) * 1000
 
         doc_id = _extract_doc_id(result)
-        if doc_id:
-            register_document(user_id=user_id, doc_id=doc_id)
+        if not doc_id:
+            return _error_response(
+                status_code=500,
+                error_code="missing_doc_id",
+                message="Ingest response missing doc_id.",
+            )
+
+        register_document(user_id=user_id, doc_id=doc_id, filename=file.filename)
 
         return {
             "status": "success",
-            "result": result,
             "doc_id": doc_id,
-            "usage": get_usage_payload(user_id, api_key),
-            "meta": _build_meta({}, elapsed_ms),
         }
     except requests.HTTPError as exc:
         return _error_response(

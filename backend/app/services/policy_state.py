@@ -96,16 +96,31 @@ def record_query(user_id):
         usage["queries"] += 1
 
 
-def register_document(user_id, doc_id, timestamp=None):
+def register_document(user_id, doc_id, filename=None, timestamp=None):
     if not doc_id:
         return
 
     recorded_at = timestamp if timestamp is not None else time.time()
+    normalized_filename = (filename or "").strip()
 
     with _state_lock:
         docs = _ensure_user_docs(user_id)
-        if not any(entry.get("doc_id") == doc_id for entry in docs):
-            docs.append({"doc_id": doc_id, "timestamp": float(recorded_at)})
+        updated = False
+        for entry in docs:
+            if entry.get("doc_id") == doc_id:
+                entry["filename"] = normalized_filename
+                entry["timestamp"] = float(recorded_at)
+                updated = True
+                break
+
+        if not updated:
+            docs.append(
+                {
+                    "doc_id": doc_id,
+                    "filename": normalized_filename,
+                    "timestamp": float(recorded_at),
+                }
+            )
         _sync_doc_count(user_id)
 
 
