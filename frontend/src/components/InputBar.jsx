@@ -99,6 +99,7 @@ function InputBar({
         <input
           ref={fileInputRef}
           type="file"
+          accept=".pdf,.doc,.docx,.md,.markdown,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/markdown"
           onChange={handleFileChange}
           className="file-input"
           hidden
