@@ -104,9 +104,14 @@ function App() {
   const [apiKey, setApiKey] = useState(
     () => localStorage.getItem(STORAGE_KEYS.apiKey) || '',
   )
-  const [model, setModel] = useState(
-    () => localStorage.getItem(STORAGE_KEYS.model) || DEFAULT_MODEL,
-  )
+  const [model, setModel] = useState(() => {
+    const storedModel = localStorage.getItem(STORAGE_KEYS.model)
+    if (!storedModel || storedModel === 'gpt-4o-mini') {
+      return DEFAULT_MODEL
+    }
+
+    return storedModel
+  })
   const [messages, setMessages] = useState([])
   const [documents, setDocuments] = useState([])
   const [isSending, setIsSending] = useState(false)

@@ -1,11 +1,12 @@
 import { useState } from 'react'
-import { Files, Info, KeyRound } from 'lucide-react'
+import { Bot, Eye, EyeOff, FileSearchCorner, Info, KeyRound } from 'lucide-react'
 import InfoModal from './InfoModal'
 
 const MODEL_OPTIONS = ['gpt-4o-mini', 'gpt-4o', 'gpt-4.1-mini']
 
 function Header({ apiKey, model, onApiKeyChange, onModelChange, onReset }) {
   const [activeModal, setActiveModal] = useState(null)
+  const [isApiKeyVisible, setIsApiKeyVisible] = useState(false)
 
   const closeModal = () => setActiveModal(null)
 
@@ -18,11 +19,11 @@ function Header({ apiKey, model, onApiKeyChange, onModelChange, onReset }) {
     <>
       <header className="header">
         <div className="title-wrap">
-          <h1 className="title">
-            <Files className="title-icon" size={20} aria-hidden="true" />
-            <span>DocLens</span>
-          </h1>
-          <p className="title-subtitle">A focused workspace for document-grounded chat</p>
+          <FileSearchCorner className="title-icon" size={28} aria-hidden="true" />
+          <div className="title-text-block">
+            <h1 className="title">DocLens</h1>
+            <p className="title-subtitle">Upload a document and chat with answers grounded in its content.</p>
+          </div>
         </div>
 
         <div className="header-main-controls">
@@ -37,6 +38,15 @@ function Header({ apiKey, model, onApiKeyChange, onModelChange, onReset }) {
                   <button
                     type="button"
                     className="icon-button icon-info"
+                    onClick={() => setIsApiKeyVisible((previousValue) => !previousValue)}
+                    aria-label={isApiKeyVisible ? 'Hide key' : 'Show key'}
+                    title={isApiKeyVisible ? 'Hide key' : 'Show key'}
+                  >
+                    {isApiKeyVisible ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                  <button
+                    type="button"
+                    className="icon-button icon-info"
                     onClick={() => setActiveModal('byok')}
                     aria-label="What is BYOK?"
                   >
@@ -46,7 +56,7 @@ function Header({ apiKey, model, onApiKeyChange, onModelChange, onReset }) {
                 <input
                   id="api-key-input"
                   className="input input-key"
-                  type="password"
+                  type={isApiKeyVisible ? 'text' : 'password'}
                   value={apiKey}
                   placeholder="Enter your Ollama key"
                   onChange={(event) => onApiKeyChange(event.target.value)}
@@ -55,6 +65,7 @@ function Header({ apiKey, model, onApiKeyChange, onModelChange, onReset }) {
 
               <div className="field-group">
                 <label className="field-label" htmlFor="model-select">
+                  <Bot size={15} aria-hidden="true" />
                   <span>Model</span>
                   <button
                     type="button"
