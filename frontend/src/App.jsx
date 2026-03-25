@@ -9,24 +9,66 @@ import './App.css'
 
 const STORAGE_KEYS = {
   userId: 'doclens_user_id',
+  byokEnabled: 'doclens_byok_enabled',
+  byokForced: 'doclens_byok_forced',
   apiKey: 'doclens_api_key',
-  model: 'doclens_model',
+  selectedModel: 'doclens_selected_model',
+  usage: 'doclens_usage',
 }
 
 const DEFAULT_MODEL = ''
 const FREE_LIMITS = { docs: 1, queries: 2 }
 const BYOK_LIMITS = { docs: 5, queries: null }
 
-function getFallbackLimits(apiKey) {
-  return apiKey?.trim() ? BYOK_LIMITS : FREE_LIMITS
+function getFallbackLimits(isBYOKEnabled) {
+  return isBYOKEnabled ? BYOK_LIMITS : FREE_LIMITS
 }
 
-function getInitialUsage(apiKey) {
+function getInitialUsage(isBYOKEnabled) {
   return {
     docs: 0,
     queries: 0,
-    limits: getFallbackLimits(apiKey),
+    limits: getFallbackLimits(isBYOKEnabled),
   }
+}
+
+function getStoredUsage(isBYOKEnabled) {
+  const raw = localStorage.getItem(STORAGE_KEYS.usage)
+  if (!raw) {
+    return getInitialUsage(isBYOKEnabled)
+  }
+
+  try {
+    const parsed = JSON.parse(raw)
+    const docs = Number.isFinite(Number(parsed?.docs)) ? Number(parsed.docs) : 0
+    const queries = Number.isFinite(Number(parsed?.queries)) ? Number(parsed.queries) : 0
+    return {
+      docs,
+      queries,
+      limits: getFallbackLimits(isBYOKEnabled),
+    }
+  } catch {
+    return getInitialUsage(isBYOKEnabled)
+  }
+}
+
+function getByokValidationMessage(apiKey, selectedModel) {
+  const hasApiKey = Boolean(apiKey.trim())
+  const hasModel = Boolean(selectedModel.trim())
+
+  if (hasApiKey && hasModel) {
+    return ''
+  }
+
+  if (!hasApiKey && !hasModel) {
+    return 'Add your API key and select a model.'
+  }
+
+  if (!hasApiKey) {
+    return 'Add your API key to continue with BYOK.'
+  }
+
+  return 'Select a model to continue with BYOK.'
 }
 
 function getUsageFromPayload(payload) {
@@ -129,11 +171,17 @@ function getOrCreateUserId() {
 
 function App() {
   const [userId, setUserId] = useState(() => getOrCreateUserId())
+  const [isBYOKEnabled, setIsBYOKEnabled] = useState(
+    () => localStorage.getItem(STORAGE_KEYS.byokEnabled) === 'true',
+  )
+  const [isBYOKForced, setIsBYOKForced] = useState(
+    () => localStorage.getItem(STORAGE_KEYS.byokForced) === 'true',
+  )
   const [apiKey, setApiKey] = useState(
     () => localStorage.getItem(STORAGE_KEYS.apiKey) || '',
   )
-  const [model, setModel] = useState(() => {
-    const storedModel = localStorage.getItem(STORAGE_KEYS.model)
+  const [selectedModel, setSelectedModel] = useState(() => {
+    const storedModel = localStorage.getItem(STORAGE_KEYS.selectedModel)
     if (!storedModel || storedModel === 'gpt-4o-mini') {
       return DEFAULT_MODEL
     }
@@ -144,27 +192,61 @@ function App() {
   const [documents, setDocuments] = useState([])
   const [loadingState, setLoadingState] = useState('idle')
   const [loadingTask, setLoadingTask] = useState('query')
-  const [usage, setUsage] = useState(() => getInitialUsage(localStorage.getItem(STORAGE_KEYS.apiKey) || ''))
+  const [usage, setUsage] = useState(() => getStoredUsage(localStorage.getItem(STORAGE_KEYS.byokEnabled) === 'true'))
   const [inlineFeedback, setInlineFeedback] = useState(null)
   const [documentPendingDeletion, setDocumentPendingDeletion] = useState(null)
   const [isDeletingDocument, setIsDeletingDocument] = useState(false)
 
+  const effectiveApiKey = isBYOKEnabled ? apiKey : ''
+  const effectiveModel = isBYOKEnabled ? selectedModel : ''
+  const byokValidationMessage = isBYOKEnabled ? getByokValidationMessage(apiKey, selectedModel) : ''
+  const sendDisabledByByok = isBYOKEnabled && Boolean(byokValidationMessage)
+
   const inputLocked = loadingState !== 'idle'
+
+  useEffect(() => {
+    if (isBYOKForced && !isBYOKEnabled) {
+      setIsBYOKEnabled(true)
+    }
+  }, [isBYOKForced, isBYOKEnabled])
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.apiKey, apiKey)
   }, [apiKey])
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.model, model)
-  }, [model])
+    localStorage.setItem(STORAGE_KEYS.selectedModel, selectedModel)
+  }, [selectedModel])
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.byokEnabled, String(isBYOKEnabled))
+  }, [isBYOKEnabled])
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.byokForced, String(isBYOKForced))
+  }, [isBYOKForced])
+
+  useEffect(() => {
+    localStorage.setItem(
+      STORAGE_KEYS.usage,
+      JSON.stringify({ docs: usage.docs, queries: usage.queries }),
+    )
+  }, [usage.docs, usage.queries])
 
   useEffect(() => {
     setUsage((previousUsage) => ({
       ...previousUsage,
-      limits: getFallbackLimits(apiKey),
+      limits: getFallbackLimits(isBYOKEnabled),
     }))
-  }, [apiKey])
+  }, [isBYOKEnabled])
+
+  const handleToggleBYOK = (nextValue) => {
+    if (isBYOKForced) {
+      return
+    }
+
+    setIsBYOKEnabled(nextValue)
+  }
 
   const addMessage = (message) => {
     setChat((previousMessages) => [...previousMessages, message])
@@ -186,10 +268,10 @@ function App() {
 
       const nextLimits = usagePayload.limits && typeof usagePayload.limits === 'object'
         ? {
-            docs: usagePayload.limits.docs ?? getFallbackLimits(apiKey).docs,
+            docs: usagePayload.limits.docs ?? getFallbackLimits(isBYOKEnabled).docs,
             queries:
               usagePayload.limits.queries === undefined
-                ? getFallbackLimits(apiKey).queries
+                ? getFallbackLimits(isBYOKEnabled).queries
                 : usagePayload.limits.queries,
           }
         : previousUsage.limits
@@ -203,7 +285,10 @@ function App() {
   }
 
   const handleSend = async (text) => {
-    if (!text.trim() || inputLocked) {
+    if (!text.trim() || inputLocked || sendDisabledByByok) {
+      if (sendDisabledByByok) {
+        setInlineFeedback({ tone: 'warning', content: byokValidationMessage })
+      }
       return
     }
 
@@ -219,7 +304,7 @@ function App() {
     setLoadingState('retrieving')
 
     try {
-      const result = await query(text, userId, apiKey, model)
+      const result = await query(text, userId, effectiveApiKey, effectiveModel)
       updateUsage(result)
 
       const generationTimeMs = Number(result?.meta?.generation_time)
@@ -240,6 +325,8 @@ function App() {
 
       if (error?.code === 'QUOTA_EXCEEDED') {
         const quotaMessage = "You've reached your free limit. Add your API key to continue."
+        setIsBYOKForced(true)
+        setIsBYOKEnabled(true)
         setInlineFeedback({ tone: 'warning', content: quotaMessage })
         addMessage({
           id: uuidv4(),
@@ -272,7 +359,7 @@ function App() {
     setLoadingState('retrieving')
 
     try {
-      const ingestResult = await ingest(file, userId, apiKey)
+      const ingestResult = await ingest(file, userId, effectiveApiKey)
       updateUsage(ingestResult)
       const docId = getDocumentIdFromIngestResponse(ingestResult)
 
@@ -304,6 +391,8 @@ function App() {
 
       if (error?.code === 'QUOTA_EXCEEDED') {
         const uploadLimitMessage = 'Upload limit reached (1 free / 5 with API key)'
+        setIsBYOKForced(true)
+        setIsBYOKEnabled(true)
         setInlineFeedback({ tone: 'warning', content: uploadLimitMessage })
         addMessage({
           id: uuidv4(),
@@ -328,7 +417,7 @@ function App() {
 
   const handleReset = async () => {
     try {
-      await deleteAllDocuments(userId, apiKey)
+      await deleteAllDocuments(userId, effectiveApiKey)
     } catch (error) {
       addMessage({
         id: uuidv4(),
@@ -342,12 +431,14 @@ function App() {
     const newUserId = uuidv4()
     localStorage.setItem(STORAGE_KEYS.userId, newUserId)
     setUserId(newUserId)
+    setIsBYOKForced(true)
+    setIsBYOKEnabled(true)
     setApiKey('')
-    setModel(DEFAULT_MODEL)
+    setSelectedModel(DEFAULT_MODEL)
     setChat([])
     setDocuments([])
     setDocumentPendingDeletion(null)
-    setUsage(getInitialUsage(''))
+    setUsage(getInitialUsage(true))
     setInlineFeedback(null)
     setLoadingState('idle')
     setLoadingTask('query')
@@ -387,7 +478,7 @@ function App() {
 
     setIsDeletingDocument(true)
     try {
-      await deleteDocument(userId, documentPendingDeletion.doc_id, apiKey)
+      await deleteDocument(userId, documentPendingDeletion.doc_id, effectiveApiKey)
       setDocuments((previousDocuments) =>
         previousDocuments.filter((document) => document.id !== documentPendingDeletion.id),
       )
@@ -416,11 +507,15 @@ function App() {
     <div className="app-page">
       <div className="app-shell">
         <Header
+          isBYOKEnabled={isBYOKEnabled}
+          isBYOKForced={isBYOKForced}
           apiKey={apiKey}
-          model={model}
+          model={selectedModel}
           usage={usage}
+          byokValidationMessage={byokValidationMessage}
+          onToggleBYOK={handleToggleBYOK}
           onApiKeyChange={setApiKey}
-          onModelChange={setModel}
+          onModelChange={setSelectedModel}
           onReset={handleReset}
         />
         <ChatWindow
@@ -432,6 +527,7 @@ function App() {
           onSend={handleSend}
           onUpload={handleUpload}
           isLocked={inputLocked}
+          isSendDisabled={sendDisabledByByok}
           loadingState={loadingState}
           loadingTask={loadingTask}
           documents={documents}

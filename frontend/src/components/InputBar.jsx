@@ -5,6 +5,7 @@ function InputBar({
   onSend,
   onUpload,
   isLocked,
+  isSendDisabled = false,
   loadingState,
   loadingTask,
   documents = [],
@@ -32,7 +33,7 @@ function InputBar({
 
   const submit = async () => {
     const text = value.trim()
-    if (!text || isLocked) {
+    if (!text || isLocked || isSendDisabled) {
       return
     }
 
@@ -132,7 +133,7 @@ function InputBar({
           type="button"
           className="icon-button composer-button composer-send"
           onClick={submit}
-          disabled={isLocked || !value.trim()}
+          disabled={isLocked || isSendDisabled || !value.trim()}
           aria-label="Send message"
           title="Send"
         >
