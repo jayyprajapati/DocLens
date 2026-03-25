@@ -134,8 +134,8 @@
 }
 
 .usage-dropdown-panel {
-  width: fit-content;
-  min-width: 0;
+  width: max-content;
+  min-width: 178px;
 }
 
 .byok-toggle-row {
@@ -270,8 +270,8 @@
 .panel-label-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  justify-content: flex-start;
+  gap: 4px;
 }
 
 .field-label.field-label-stack {
@@ -284,6 +284,16 @@
 .compact-input {
   width: 220px;
   min-width: 220px;
+}
+
+.compact-input-wrap {
+  width: 190px;
+  max-width: 190px;
+}
+
+.compact-input-key {
+  width: 190px;
+  min-width: 190px;
 }
 
 .control-leading-icon {
@@ -341,6 +351,7 @@
   color: #5f6b7a;
   font-size: 13px;
   line-height: 1.2;
+  white-space: nowrap;
 }
 
 .reset-divider {
@@ -1110,6 +1121,33 @@
   color: #5f6f82;
 }
 
+.legal-meta {
+  margin-top: 6px !important;
+  font-size: 12px;
+  color: #7a8ca1;
+}
+
+.legal-back-row {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.legal-back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #2f5e83;
+  text-decoration: none;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.legal-back-link:hover {
+  text-decoration: underline;
+  cursor: pointer;
+}
+
 .legal-section {
   border: 1px solid #e6eef6;
   border-radius: 8px;
@@ -1131,6 +1169,14 @@
   margin: 0;
   color: #4f5f72;
   line-height: 1.6;
+}
+
+.legal-section ul {
+  margin: 0;
+  padding-left: 18px;
+  color: #4f5f72;
+  display: grid;
+  gap: 6px;
 }
 
 .modal-overlay {
@@ -1265,6 +1311,13 @@
   .compact-input {
     width: 100%;
     min-width: 0;
+  }
+
+  .compact-input-wrap,
+  .compact-input-key {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
   }
 
   .app-footer {

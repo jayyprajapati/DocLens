@@ -114,10 +114,10 @@ function Header({
 
                       <div className="control-row control-row-compact">
                         <KeyRound size={16} aria-hidden="true" className="control-leading-icon" />
-                        <div className="input-with-inline-action">
+                        <div className="input-with-inline-action compact-input-wrap">
                           <input
                             id="api-key-input"
-                            className="input input-key input-key-inline compact-input"
+                            className="input input-key input-key-inline compact-input compact-input-key"
                             type={isApiKeyVisible ? 'text' : 'password'}
                             value={apiKey}
                             placeholder="Enter your Ollama key"

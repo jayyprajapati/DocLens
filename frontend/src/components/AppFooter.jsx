@@ -8,7 +8,7 @@ function AppFooter() {
 
   return (
     <footer className="app-footer" aria-label="DocLens footer">
-      <div className="footer-left">© {currentYear} DocLens</div>
+      <div className="footer-left">© {currentYear} DocLens. All rights reserved.</div>
       <div className="footer-center">The response is AI-generated. Verify sources.</div>
       <div className="footer-right">
         <Link className="footer-link" to="/privacy">Privacy Policy</Link>
