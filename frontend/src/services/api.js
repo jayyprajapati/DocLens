@@ -10,7 +10,17 @@ async function parseResponse(response) {
       (isJson && payload?.detail) ||
       (typeof payload === 'string' && payload) ||
       `Request failed with status ${response.status}`
-    throw new Error(message)
+
+    const error = new Error(message)
+    error.status = response.status
+
+    if (isJson && payload && typeof payload === 'object') {
+      error.code = payload.error || null
+      error.usage = payload.usage || null
+      error.payload = payload
+    }
+
+    throw error
   }
 
   return payload
