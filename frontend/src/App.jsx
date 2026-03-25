@@ -14,6 +14,34 @@ const STORAGE_KEYS = {
 }
 
 const DEFAULT_MODEL = ''
+const FREE_LIMITS = { docs: 1, queries: 2 }
+const BYOK_LIMITS = { docs: 5, queries: null }
+
+function getFallbackLimits(apiKey) {
+  return apiKey?.trim() ? BYOK_LIMITS : FREE_LIMITS
+}
+
+function getInitialUsage(apiKey) {
+  return {
+    docs: 0,
+    queries: 0,
+    limits: getFallbackLimits(apiKey),
+  }
+}
+
+function getUsageFromPayload(payload) {
+  if (!payload || typeof payload !== 'object' || !payload.usage || typeof payload.usage !== 'object') {
+    return null
+  }
+
+  return payload.usage
+}
+
+function waitForNextFrame() {
+  return new Promise((resolve) => {
+    requestAnimationFrame(() => resolve())
+  })
+}
 
 function parseErrorMessage(rawMessage) {
   if (!rawMessage) {
@@ -112,12 +140,16 @@ function App() {
 
     return storedModel
   })
-  const [messages, setMessages] = useState([])
+  const [chat, setChat] = useState([])
   const [documents, setDocuments] = useState([])
-  const [isSending, setIsSending] = useState(false)
-  const [isUploading, setIsUploading] = useState(false)
+  const [loadingState, setLoadingState] = useState('idle')
+  const [loadingTask, setLoadingTask] = useState('query')
+  const [usage, setUsage] = useState(() => getInitialUsage(localStorage.getItem(STORAGE_KEYS.apiKey) || ''))
+  const [inlineFeedback, setInlineFeedback] = useState(null)
   const [documentPendingDeletion, setDocumentPendingDeletion] = useState(null)
   const [isDeletingDocument, setIsDeletingDocument] = useState(false)
+
+  const inputLocked = loadingState !== 'idle'
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.apiKey, apiKey)
@@ -127,14 +159,55 @@ function App() {
     localStorage.setItem(STORAGE_KEYS.model, model)
   }, [model])
 
+  useEffect(() => {
+    setUsage((previousUsage) => ({
+      ...previousUsage,
+      limits: getFallbackLimits(apiKey),
+    }))
+  }, [apiKey])
+
   const addMessage = (message) => {
-    setMessages((previousMessages) => [...previousMessages, message])
+    setChat((previousMessages) => [...previousMessages, message])
+  }
+
+  const updateUsage = (payload) => {
+    const usagePayload = getUsageFromPayload(payload)
+    if (!usagePayload) {
+      return
+    }
+
+    setUsage((previousUsage) => {
+      const nextDocs = Number.isFinite(Number(usagePayload.docs))
+        ? Number(usagePayload.docs)
+        : previousUsage.docs
+      const nextQueries = Number.isFinite(Number(usagePayload.queries))
+        ? Number(usagePayload.queries)
+        : previousUsage.queries
+
+      const nextLimits = usagePayload.limits && typeof usagePayload.limits === 'object'
+        ? {
+            docs: usagePayload.limits.docs ?? getFallbackLimits(apiKey).docs,
+            queries:
+              usagePayload.limits.queries === undefined
+                ? getFallbackLimits(apiKey).queries
+                : usagePayload.limits.queries,
+          }
+        : previousUsage.limits
+
+      return {
+        docs: nextDocs,
+        queries: nextQueries,
+        limits: nextLimits,
+      }
+    })
   }
 
   const handleSend = async (text) => {
-    if (!text.trim() || isSending) {
+    if (!text.trim() || inputLocked) {
       return
     }
+
+    setInlineFeedback(null)
 
     addMessage({
       id: uuidv4(),
@@ -142,16 +215,19 @@ function App() {
       content: text,
     })
 
-    addMessage({
-      id: uuidv4(),
-      role: 'system',
-      tone: 'ack',
-      content: 'Processing your question...'
-    })
+    setLoadingTask('query')
+    setLoadingState('retrieving')
 
-    setIsSending(true)
     try {
       const result = await query(text, userId, apiKey, model)
+      updateUsage(result)
+
+      const generationTimeMs = Number(result?.meta?.generation_time)
+      if (Number.isFinite(generationTimeMs) && generationTimeMs > 0) {
+        setLoadingState('generating')
+        await waitForNextFrame()
+      }
+
       addMessage({
         id: uuidv4(),
         role: 'assistant',
@@ -160,6 +236,20 @@ function App() {
         sources: Array.isArray(result?.sources) ? result.sources : [],
       })
     } catch (error) {
+      updateUsage(error?.payload)
+
+      if (error?.code === 'QUOTA_EXCEEDED') {
+        const quotaMessage = "You've reached your free limit. Add your API key to continue."
+        setInlineFeedback({ tone: 'warning', content: quotaMessage })
+        addMessage({
+          id: uuidv4(),
+          role: 'system',
+          tone: 'warning',
+          content: quotaMessage,
+        })
+        return
+      }
+
       addMessage({
         id: uuidv4(),
         role: 'system',
@@ -167,25 +257,23 @@ function App() {
         content: `Could not complete your request. ${parseErrorMessage(error?.message)}`,
       })
     } finally {
-      setIsSending(false)
+      setLoadingState('idle')
+      setLoadingTask('query')
     }
   }
 
   const handleUpload = async (file) => {
-    if (!file || isUploading) {
+    if (!file || inputLocked) {
       return
     }
 
-    setIsUploading(true)
-    addMessage({
-      id: uuidv4(),
-      role: 'system',
-      tone: 'ack',
-      content: 'Uploading and processing your document...'
-    })
+    setInlineFeedback(null)
+    setLoadingTask('upload')
+    setLoadingState('retrieving')
 
     try {
       const ingestResult = await ingest(file, userId, apiKey)
+      updateUsage(ingestResult)
       const docId = getDocumentIdFromIngestResponse(ingestResult)
 
       if (!docId) {
@@ -212,6 +300,20 @@ function App() {
         content: 'Document uploaded successfully',
       })
     } catch (error) {
+      updateUsage(error?.payload)
+
+      if (error?.code === 'QUOTA_EXCEEDED') {
+        const uploadLimitMessage = 'Upload limit reached (1 free / 5 with API key)'
+        setInlineFeedback({ tone: 'warning', content: uploadLimitMessage })
+        addMessage({
+          id: uuidv4(),
+          role: 'system',
+          tone: 'warning',
+          content: uploadLimitMessage,
+        })
+        return
+      }
+
       addMessage({
         id: uuidv4(),
         role: 'system',
@@ -219,7 +321,8 @@ function App() {
         content: `Upload failed. ${toPlainLanguageUploadError(error?.message)}`,
       })
     } finally {
-      setIsUploading(false)
+      setLoadingState('idle')
+      setLoadingTask('query')
     }
   }
 
@@ -241,9 +344,13 @@ function App() {
     setUserId(newUserId)
     setApiKey('')
     setModel(DEFAULT_MODEL)
-    setMessages([])
+    setChat([])
     setDocuments([])
     setDocumentPendingDeletion(null)
+    setUsage(getInitialUsage(''))
+    setInlineFeedback(null)
+    setLoadingState('idle')
+    setLoadingTask('query')
   }
 
   const handleRequestRemoveDocument = (document) => {
@@ -303,7 +410,7 @@ function App() {
     }
   }
 
-  const hasConversation = messages.length > 0
+  const hasConversation = chat.length > 0
 
   return (
     <div className="app-page">
@@ -311,24 +418,38 @@ function App() {
         <Header
           apiKey={apiKey}
           model={model}
+          usage={usage}
           onApiKeyChange={setApiKey}
           onModelChange={setModel}
           onReset={handleReset}
         />
-        <ChatWindow messages={messages} isSending={isSending} />
+        <ChatWindow
+          messages={chat}
+          loadingState={loadingState}
+          loadingTask={loadingTask}
+        />
         <InputBar
           onSend={handleSend}
           onUpload={handleUpload}
-          isSending={isSending}
-          isUploading={isUploading}
+          isLocked={inputLocked}
+          loadingState={loadingState}
+          loadingTask={loadingTask}
           documents={documents}
           onRequestRemoveDocument={handleRequestRemoveDocument}
           userId={userId}
         />
 
+        {inlineFeedback && (
+          <div className={`inline-feedback inline-feedback-${inlineFeedback.tone}`} role="status" aria-live="polite">
+            {inlineFeedback.content}
+          </div>
+        )}
+
         {hasConversation && (
           <div className="constraints-inline">
-            Free usage limits: max 2 queries, max 1 document, max 3 pages.
+            {usage.limits?.queries == null
+              ? `Docs: ${usage.docs} / ${usage.limits?.docs ?? 5} • Queries: unlimited`
+              : `Docs: ${usage.docs} / ${usage.limits?.docs ?? 1} • Queries: ${usage.queries} / ${usage.limits?.queries ?? 2}`}
           </div>
         )}
 

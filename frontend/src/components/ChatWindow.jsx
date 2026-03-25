@@ -1,14 +1,22 @@
 import { useEffect, useRef } from 'react'
-import { motion } from 'framer-motion'
 import { KeyRound, MessageCircle, Paperclip, Sparkles } from 'lucide-react'
 import MessageBubble from './MessageBubble'
 
-function ChatWindow({ messages, isSending }) {
+function ChatWindow({ messages, loadingState, loadingTask }) {
   const bottomRef = useRef(null)
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
-  }, [messages, isSending])
+  }, [messages, loadingState])
+
+  const processingLabel =
+    loadingState === 'generating'
+      ? 'Generating answer...'
+      : loadingState === 'retrieving' && loadingTask === 'upload'
+        ? 'Uploading and indexing your document...'
+        : loadingState === 'retrieving'
+          ? 'Searching your document...'
+          : null
 
   return (
     <main className="chat-window">
@@ -49,16 +57,10 @@ function ChatWindow({ messages, isSending }) {
         <MessageBubble key={message.id} message={message} />
       ))}
 
-      {isSending && (
-        <div className="system-message system-ack system-thinking" aria-live="polite">
-          <span>Thinking through your document context</span>
-          <motion.span
-            className="thinking-dots"
-            animate={{ opacity: [0.25, 1, 0.25] }}
-            transition={{ duration: 1.1, repeat: Infinity, ease: 'easeInOut' }}
-          >
-            ...
-          </motion.span>
+      {processingLabel && (
+        <div className="processing-indicator" role="status" aria-live="polite">
+          <span className="processing-spinner" aria-hidden="true" />
+          <span>{processingLabel}</span>
         </div>
       )}
 

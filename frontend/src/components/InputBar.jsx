@@ -4,8 +4,9 @@ import { Paperclip, SendHorizontal } from 'lucide-react'
 function InputBar({
   onSend,
   onUpload,
-  isSending,
-  isUploading,
+  isLocked,
+  loadingState,
+  loadingTask,
   documents = [],
   onRequestRemoveDocument = () => {},
   userId = '',
@@ -31,7 +32,7 @@ function InputBar({
 
   const submit = async () => {
     const text = value.trim()
-    if (!text || isSending) {
+    if (!text || isLocked) {
       return
     }
 
@@ -109,7 +110,7 @@ function InputBar({
           type="button"
           className="icon-button composer-button"
           onClick={handleUploadClick}
-          disabled={isUploading}
+          disabled={isLocked}
           aria-label="Upload document"
           title="Upload document"
         >
@@ -124,14 +125,14 @@ function InputBar({
           placeholder="Ask something about your docs..."
           onChange={handleChange}
           onKeyDown={handleKeyDown}
-          disabled={isSending}
+          disabled={isLocked}
         />
 
         <button
           type="button"
           className="icon-button composer-button composer-send"
           onClick={submit}
-          disabled={isSending || !value.trim()}
+          disabled={isLocked || !value.trim()}
           aria-label="Send message"
           title="Send"
         >
@@ -141,11 +142,13 @@ function InputBar({
 
       <div className="composer-meta" aria-live="polite">
         <div className="composer-hint">
-          {isUploading
-            ? 'Uploading document and preparing retrieval context...'
-            : isSending
-              ? 'Retrieving relevant chunks and preparing answer...'
-              : 'Enter for send message, Shift + Enter for a new line.'}
+          {loadingState === 'retrieving' && loadingTask === 'upload'
+            ? 'Uploading and indexing your document...'
+            : loadingState === 'retrieving'
+              ? 'Searching your document...'
+              : loadingState === 'generating'
+                ? 'Generating answer...'
+                : 'Enter for send message, Shift + Enter for a new line.'}
         </div>
         <div className="composer-user-id" title={userId}>
           User ID: {userId}

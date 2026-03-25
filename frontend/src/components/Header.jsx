@@ -4,9 +4,14 @@ import InfoModal from './InfoModal'
 
 const MODEL_OPTIONS = ['gpt-4o-mini', 'gpt-4o', 'gpt-4.1-mini']
 
-function Header({ apiKey, model, onApiKeyChange, onModelChange, onReset }) {
+function Header({ apiKey, model, usage, onApiKeyChange, onModelChange, onReset }) {
   const [activeModal, setActiveModal] = useState(null)
   const [isApiKeyVisible, setIsApiKeyVisible] = useState(false)
+
+  const docsLimit = usage?.limits?.docs ?? 1
+  const queriesLimit = usage?.limits?.queries
+  const docsUsed = usage?.docs ?? 0
+  const queriesUsed = usage?.queries ?? 0
 
   const closeModal = () => setActiveModal(null)
 
@@ -28,57 +33,47 @@ function Header({ apiKey, model, onApiKeyChange, onModelChange, onReset }) {
 
         <div className="header-main-controls">
           <div className="byok-section" aria-label="BYOK model section">
-            <div className="byok-title">BYOK Model</div>
-
             <div className="header-controls byok-controls">
-              <div className="field-group key-group">
-                <label className="field-label" htmlFor="api-key-input">
-                  <KeyRound size={15} aria-hidden="true" />
-                  <span>Ollama key</span>
+              <div className="byok-title">BYOK Model</div>
+
+              <div className="control-row">
+                <KeyRound size={16} aria-hidden="true" className="control-leading-icon" />
+                <div className="input-with-inline-action">
+                  <input
+                    id="api-key-input"
+                    className="input input-key input-key-inline"
+                    type={isApiKeyVisible ? 'text' : 'password'}
+                    value={apiKey}
+                    placeholder="Enter your Ollama key"
+                    aria-label="Ollama key"
+                    onChange={(event) => onApiKeyChange(event.target.value)}
+                  />
                   <button
                     type="button"
-                    className="icon-button icon-info"
+                    className="inline-input-action"
                     onClick={() => setIsApiKeyVisible((previousValue) => !previousValue)}
                     aria-label={isApiKeyVisible ? 'Hide key' : 'Show key'}
                     title={isApiKeyVisible ? 'Hide key' : 'Show key'}
                   >
-                    {isApiKeyVisible ? <EyeOff size={18} /> : <Eye size={18} />}
+                    {isApiKeyVisible ? <EyeOff size={16} /> : <Eye size={16} />}
                   </button>
-                  <button
-                    type="button"
-                    className="icon-button icon-info"
-                    onClick={() => setActiveModal('byok')}
-                    aria-label="What is BYOK?"
-                  >
-                    <Info size={18} />
-                  </button>
-                </label>
-                <input
-                  id="api-key-input"
-                  className="input input-key"
-                  type={isApiKeyVisible ? 'text' : 'password'}
-                  value={apiKey}
-                  placeholder="Enter your Ollama key"
-                  onChange={(event) => onApiKeyChange(event.target.value)}
-                />
+                </div>
+                <button
+                  type="button"
+                  className="icon-button icon-info"
+                  onClick={() => setActiveModal('byok')}
+                  aria-label="What is BYOK?"
+                >
+                  <Info size={18} />
+                </button>
               </div>
 
-              <div className="field-group">
-                <label className="field-label" htmlFor="model-select">
-                  <Bot size={15} aria-hidden="true" />
-                  <span>Model</span>
-                  <button
-                    type="button"
-                    className="icon-button icon-info"
-                    onClick={() => setActiveModal('model')}
-                    aria-label="Model information"
-                  >
-                    <Info size={18} />
-                  </button>
-                </label>
+              <div className="control-row">
+                <Bot size={16} aria-hidden="true" className="control-leading-icon" />
                 <select
                   id="model-select"
                   className="input input-model"
+                  aria-label="Model"
                   value={model}
                   onChange={(event) => onModelChange(event.target.value)}
                 >
@@ -89,14 +84,32 @@ function Header({ apiKey, model, onApiKeyChange, onModelChange, onReset }) {
                     </option>
                   ))}
                 </select>
+
+                <button
+                  type="button"
+                  className="icon-button icon-info"
+                  onClick={() => setActiveModal('model')}
+                  aria-label="Model information"
+                >
+                  <Info size={18} />
+                </button>
               </div>
             </div>
           </div>
 
           <div className="header-reset-wrap">
-            <button type="button" className="button button-reset" onClick={() => setActiveModal('reset')}>
-              Reset
-            </button>
+            <div className="reset-usage-stack" aria-live="polite">
+              <div className="usage-line">Docs: {docsUsed} / {docsLimit}</div>
+              <div className="usage-line">
+                {queriesLimit == null
+                  ? 'Queries: unlimited'
+                  : `Queries: ${queriesUsed} / ${queriesLimit}`}
+              </div>
+              <div className="reset-divider" aria-hidden="true" />
+              <button type="button" className="button button-reset" onClick={() => setActiveModal('reset')}>
+                Reset
+              </button>
+            </div>
           </div>
         </div>
       </header>
