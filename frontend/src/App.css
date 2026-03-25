@@ -129,6 +129,15 @@
   padding: 10px;
 }
 
+.byok-dropdown-panel {
+  width: 340px;
+}
+
+.usage-dropdown-panel {
+  width: fit-content;
+  min-width: 0;
+}
+
 .byok-toggle-row {
   display: inline-flex;
   align-items: center;
@@ -210,19 +219,20 @@
 
 .byok-section {
   display: flex;
-  flex-direction: row;
+  flex-direction: column;
   align-items: stretch;
   gap: 10px;
-  border: 1px solid #e5ecf5;
-  border-radius: 8px;
-  padding: 10px;
-  background: #fff;
+  border: none;
+  border-radius: 0;
+  padding: 0;
+  background: transparent;
 }
 
 .byok-controls {
-  width: auto;
+  width: 100%;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
+  flex-direction: column;
   gap: 10px;
 }
 
@@ -245,6 +255,35 @@
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.control-row-compact {
+  width: fit-content;
+}
+
+.panel-field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.panel-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.field-label.field-label-stack {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 12px;
+  color: #5d7894;
+}
+
+.compact-input {
+  width: 220px;
+  min-width: 220px;
 }
 
 .control-leading-icon {
@@ -991,6 +1030,109 @@
   background: #f3fbf7;
 }
 
+.app-footer {
+  flex-shrink: 0;
+  min-height: 36px;
+  border-top: 1px solid #e6ebf2;
+  background: #fcfdfd;
+  color: #6e7e90;
+  font-size: 12px;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+}
+
+.footer-left {
+  justify-self: start;
+}
+
+.footer-center {
+  justify-self: center;
+}
+
+.footer-right {
+  justify-self: end;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.footer-link {
+  color: #5f7d9a;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.footer-link:hover {
+  color: #2f5e83;
+  text-decoration: underline;
+}
+
+.footer-dot {
+  color: #9cb0c3;
+}
+
+.legal-page {
+  min-height: 100svh;
+  padding: 16px;
+  background: #f8fbfe;
+}
+
+.legal-shell {
+  width: min(900px, 100%);
+  margin: 0 auto;
+  border: 1px solid #dbe4ef;
+  border-radius: 10px;
+  background: #fff;
+  padding: 18px;
+  display: grid;
+  gap: 12px;
+}
+
+.legal-header {
+  border-bottom: 1px solid #e7edf4;
+  padding-bottom: 10px;
+}
+
+.legal-header h1 {
+  margin: 0 0 6px;
+  font-family: 'Fraunces', 'Times New Roman', serif;
+  font-size: 30px;
+  color: #1a2a3b;
+}
+
+.legal-header p {
+  margin: 0;
+  color: #5f6f82;
+}
+
+.legal-section {
+  border: 1px solid #e6eef6;
+  border-radius: 8px;
+  padding: 12px;
+  display: grid;
+  gap: 8px;
+}
+
+.legal-section h2 {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+  color: #2d4f6d;
+}
+
+.legal-section p {
+  margin: 0;
+  color: #4f5f72;
+  line-height: 1.6;
+}
+
 .modal-overlay {
   position: fixed;
   inset: 0;
@@ -1093,6 +1235,11 @@
     margin-top: 8px;
   }
 
+  .byok-dropdown-panel,
+  .usage-dropdown-panel {
+    width: 100%;
+  }
+
   .header-reset-wrap {
     width: 100%;
     justify-content: flex-start;
@@ -1104,11 +1251,44 @@
   }
 
   .byok-controls {
-    width: auto;
+    width: 100%;
   }
 
   .control-row {
-    width: auto;
+    width: 100%;
+  }
+
+  .control-row-compact {
+    width: 100%;
+  }
+
+  .compact-input {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .app-footer {
+    grid-template-columns: 1fr;
+    align-items: flex-start;
+    gap: 6px;
+  }
+
+  .footer-center,
+  .footer-left,
+  .footer-right {
+    justify-self: start;
+  }
+
+  .legal-page {
+    padding: 10px;
+  }
+
+  .legal-shell {
+    padding: 14px;
+  }
+
+  .legal-header h1 {
+    font-size: 26px;
   }
 
   .field-group,

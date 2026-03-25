@@ -76,11 +76,9 @@ function Header({
             </button>
 
             {openDropdown === 'byok' && (
-              <div className="header-dropdown-panel" id="byok-dropdown-panel">
+              <div className="header-dropdown-panel byok-dropdown-panel" id="byok-dropdown-panel">
                 <div className="byok-section" aria-label="BYOK model section">
                   <div className="header-controls byok-controls">
-                    <div className="byok-title">BYOK Model</div>
-
                     <div className="byok-toggle-row">
                       <span className="byok-toggle-label">Enable BYOK</span>
                       <label className="switch" aria-label="Enable BYOK">
@@ -101,63 +99,74 @@ function Header({
                       </div>
                     )}
 
-                    <div className="control-row">
-                      <KeyRound size={16} aria-hidden="true" className="control-leading-icon" />
-                      <div className="input-with-inline-action">
-                        <input
-                          id="api-key-input"
-                          className="input input-key input-key-inline"
-                          type={isApiKeyVisible ? 'text' : 'password'}
-                          value={apiKey}
-                          placeholder="Enter your Ollama key"
-                          aria-label="Ollama key"
-                          onChange={(event) => onApiKeyChange(event.target.value)}
-                        />
+                    <div className="panel-field-group">
+                      <div className="panel-label-row">
+                        <label htmlFor="api-key-input" className="field-label field-label-stack">API Key</label>
                         <button
                           type="button"
-                          className="inline-input-action"
-                          onClick={() => setIsApiKeyVisible((previousValue) => !previousValue)}
-                          aria-label={isApiKeyVisible ? 'Hide key' : 'Show key'}
-                          title={isApiKeyVisible ? 'Hide key' : 'Show key'}
+                          className="icon-button icon-info"
+                          onClick={() => setActiveModal('byok')}
+                          aria-label="What is BYOK?"
                         >
-                          {isApiKeyVisible ? <EyeOff size={16} /> : <Eye size={16} />}
+                          <Info size={18} />
                         </button>
                       </div>
-                      <button
-                        type="button"
-                        className="icon-button icon-info"
-                        onClick={() => setActiveModal('byok')}
-                        aria-label="What is BYOK?"
-                      >
-                        <Info size={18} />
-                      </button>
+
+                      <div className="control-row control-row-compact">
+                        <KeyRound size={16} aria-hidden="true" className="control-leading-icon" />
+                        <div className="input-with-inline-action">
+                          <input
+                            id="api-key-input"
+                            className="input input-key input-key-inline compact-input"
+                            type={isApiKeyVisible ? 'text' : 'password'}
+                            value={apiKey}
+                            placeholder="Enter your Ollama key"
+                            aria-label="Ollama key"
+                            onChange={(event) => onApiKeyChange(event.target.value)}
+                          />
+                          <button
+                            type="button"
+                            className="inline-input-action"
+                            onClick={() => setIsApiKeyVisible((previousValue) => !previousValue)}
+                            aria-label={isApiKeyVisible ? 'Hide key' : 'Show key'}
+                            title={isApiKeyVisible ? 'Hide key' : 'Show key'}
+                          >
+                            {isApiKeyVisible ? <EyeOff size={16} /> : <Eye size={16} />}
+                          </button>
+                        </div>
+                      </div>
                     </div>
 
-                    <div className="control-row">
-                      <Bot size={16} aria-hidden="true" className="control-leading-icon" />
-                      <select
-                        id="model-select"
-                        className="input input-model"
-                        aria-label="Model"
-                        value={model}
-                        onChange={(event) => onModelChange(event.target.value)}
-                      >
-                        <option value="">Select model</option>
-                        {MODEL_OPTIONS.map((option) => (
-                          <option key={option} value={option}>
-                            {option}
-                          </option>
-                        ))}
-                      </select>
+                    <div className="panel-field-group">
+                      <div className="panel-label-row">
+                        <label htmlFor="model-select" className="field-label field-label-stack">Model</label>
+                        <button
+                          type="button"
+                          className="icon-button icon-info"
+                          onClick={() => setActiveModal('model')}
+                          aria-label="Model information"
+                        >
+                          <Info size={18} />
+                        </button>
+                      </div>
 
-                      <button
-                        type="button"
-                        className="icon-button icon-info"
-                        onClick={() => setActiveModal('model')}
-                        aria-label="Model information"
-                      >
-                        <Info size={18} />
-                      </button>
+                      <div className="control-row control-row-compact">
+                        <Bot size={16} aria-hidden="true" className="control-leading-icon" />
+                        <select
+                          id="model-select"
+                          className="input input-model compact-input"
+                          aria-label="Model"
+                          value={model}
+                          onChange={(event) => onModelChange(event.target.value)}
+                        >
+                          <option value="">Select model</option>
+                          {MODEL_OPTIONS.map((option) => (
+                            <option key={option} value={option}>
+                              {option}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
                     </div>
 
                     {isBYOKEnabled && byokValidationMessage && (
@@ -184,7 +193,7 @@ function Header({
             </button>
 
             {openDropdown === 'usage' && (
-              <div className="header-dropdown-panel" id="usage-dropdown-panel">
+              <div className="header-dropdown-panel usage-dropdown-panel" id="usage-dropdown-panel">
                 <div className="header-reset-wrap">
                   <div className="reset-usage-stack" aria-live="polite">
                     <div className="usage-line">Docs: {docsUsed} / {docsLimit}</div>

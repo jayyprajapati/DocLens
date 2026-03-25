@@ -4,6 +4,7 @@ import Header from './components/Header'
 import ChatWindow from './components/ChatWindow'
 import InputBar from './components/InputBar'
 import InfoModal from './components/InfoModal'
+import AppFooter from './components/AppFooter'
 import { deleteAllDocuments, deleteDocument, ingest, query } from './services/api'
 import './App.css'
 
@@ -548,6 +549,8 @@ function App() {
               : `Docs: ${usage.docs} / ${usage.limits?.docs ?? 1} • Queries: ${usage.queries} / ${usage.limits?.queries ?? 2}`}
           </div>
         )}
+
+        <AppFooter />
 
         <InfoModal
           isOpen={Boolean(documentPendingDeletion)}
