@@ -150,7 +150,7 @@ def query_endpoint(request: QueryRequest):
     if not can_query(request.user_id, request.api_key):
         return _error_response(
             status_code=429,
-            error_code="quota_exhausted",
+            error_code="QUOTA_EXCEEDED",
             message="Free quota exhausted. Use your API key to continue.",
             extra={"usage": get_usage_payload(request.user_id, request.api_key)},
         )
@@ -197,10 +197,12 @@ def query_endpoint(request: QueryRequest):
 
 @router.post("/ingest")
 async def ingest_endpoint(file: UploadFile = File(...), user_id: str = Form(...), api_key: str | None = Form(None)):
+    start = time.perf_counter()
+
     if not can_ingest(user_id, api_key):
         return _error_response(
             status_code=429,
-            error_code="quota_exhausted",
+            error_code="QUOTA_EXCEEDED",
             message="Free quota exhausted. Use your API key to continue.",
             extra={"usage": get_usage_payload(user_id, api_key)},
         )
@@ -248,9 +250,13 @@ async def ingest_endpoint(file: UploadFile = File(...), user_id: str = Form(...)
 
         register_document(user_id=user_id, doc_id=doc_id, filename=file.filename)
 
+        elapsed_ms = (time.perf_counter() - start) * 1000
+
         return {
             "status": "success",
             "doc_id": doc_id,
+            "usage": get_usage_payload(user_id, api_key),
+            "meta": _build_meta({}, elapsed_ms),
         }
     except requests.HTTPError as exc:
         return _error_response(
