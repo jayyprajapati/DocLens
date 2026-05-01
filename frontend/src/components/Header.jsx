@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Bot, ChevronDown, Eye, EyeOff, FileSearchCorner, Info, KeyRound, RefreshCw } from 'lucide-react'
+import { Bot, ChevronDown, Eye, EyeOff, FileSearchCorner, Info, KeyRound, Monitor, Moon, RefreshCw, Sun } from 'lucide-react'
 import InfoModal from './InfoModal'
 import { fetchModels } from '../services/api'
 
@@ -9,7 +9,6 @@ const PROVIDER_OPTIONS = [
 ]
 
 // Static suggestions shown before fetching / as fallback on error.
-// Ollama Cloud: only the one confirmed-working model from the Cortex default.
 const MODEL_SUGGESTIONS = {
   openai: ['gpt-4o-mini', 'gpt-4o', 'gpt-4.1-mini', 'gpt-4.1', 'o4-mini'],
   ollama_cloud: ['gpt-oss:120b'],
@@ -21,14 +20,24 @@ const API_KEY_PLACEHOLDER = {
   '': 'Select a provider first',
 }
 
+const THEME_CYCLE = { light: 'dark', dark: 'system', system: 'light' }
+
+function ThemeIcon({ theme }) {
+  if (theme === 'light')  return <Sun size={15} />
+  if (theme === 'dark')   return <Moon size={15} />
+  return <Moon size={15} />
+}
+
 function Header({
   apiKey,
   model,
   provider,
+  theme = 'system',
   byokValidationMessage,
   onApiKeyChange,
   onModelChange,
   onProviderChange,
+  onThemeChange,
   onReset,
 }) {
   const [activeModal, setActiveModal] = useState(null)
@@ -81,6 +90,10 @@ function Header({
     }
   }
 
+  const handleThemeToggle = () => {
+    if (onThemeChange) onThemeChange(THEME_CYCLE[theme] || 'system')
+  }
+
   const canFetchModels = provider === 'ollama_cloud' && apiKey.trim().length > 0
 
   return (
@@ -95,6 +108,17 @@ function Header({
         </div>
 
         <div className="header-main-controls">
+          {/* Theme toggle */}
+          <button
+            type="button"
+            className="theme-toggle-btn"
+            onClick={handleThemeToggle}
+            aria-label={`Switch theme (current: ${theme})`}
+            title={`Theme: ${theme}`}
+          >
+            <ThemeIcon theme={theme} />
+          </button>
+
           <div className="header-dropdown" ref={byokDropdownRef}>
             <button
               type="button"
@@ -232,10 +256,10 @@ function Header({
                         </p>
                       )}
                       {canFetchModels && !modelFetchError && (
-                        <p className="byok-inline-error" style={{ color: 'var(--color-text-muted, #888)', marginTop: '4px' }}>
+                        <p className="byok-inline-error" style={{ color: 'var(--text3)', marginTop: '4px' }}>
                           {isFetchingModels
                             ? 'Fetching available models...'
-                            : 'Click ↻ to load your available Ollama Cloud models.'}
+                            : 'Click the refresh icon to load your available Ollama Cloud models.'}
                         </p>
                       )}
                     </div>
@@ -268,7 +292,7 @@ function Header({
       </InfoModal>
 
       <InfoModal isOpen={activeModal === 'model'} onClose={closeModal} title="About Models">
-        <p>Type any model name or pick from the suggestions. For Ollama Cloud, click the ↻ button to load your account&apos;s actual available models.</p>
+        <p>Type any model name or pick from the suggestions. For Ollama Cloud, click the refresh button to load your account&apos;s actual available models.</p>
         <p><strong>OpenAI</strong> — billed to your OpenAI account:</p>
         <ul>
           <li><code>gpt-4o-mini</code> — fast and cost-efficient.</li>
@@ -278,7 +302,7 @@ function Header({
         </ul>
         <p><strong>Ollama Cloud</strong> — billed to your Ollama account:</p>
         <ul>
-          <li><code>gpt-oss:120b</code> — confirmed default model. Click ↻ to see all models available in your account.</li>
+          <li><code>gpt-oss:120b</code> — confirmed default model. Click the refresh icon to see all models available in your account.</li>
         </ul>
       </InfoModal>
 

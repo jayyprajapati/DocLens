@@ -14,7 +14,7 @@ def query(
     app_name="doclens",
     doc_ids=None,
     base_url=None,
-    timeout=60,
+    timeout=120,
     llm=None,
 ):
     """
@@ -56,7 +56,7 @@ def ingest(file_path, user_id, app_name="doclens", base_url=None, timeout=120):
     return response.json()
 
 
-def delete_document(user_id, doc_id, app_name="doclens", base_url=None, timeout=60):
+def delete_document(user_id, doc_id, app_name="doclens", base_url=None, timeout=120):
     endpoint = (base_url or DEFAULT_RAG_API_BASE_URL).rstrip("/") + "/delete"
 
     payload = {"user_id": user_id, "doc_id": doc_id, "app_name": app_name}
@@ -66,7 +66,7 @@ def delete_document(user_id, doc_id, app_name="doclens", base_url=None, timeout=
     return response.json()
 
 
-def delete_all_documents(user_id, app_name="doclens", base_url=None, timeout=60):
+def delete_all_documents(user_id, app_name="doclens", base_url=None, timeout=120):
     endpoint = (base_url or DEFAULT_RAG_API_BASE_URL).rstrip("/") + "/delete_all"
 
     payload = {"user_id": user_id, "app_name": app_name}

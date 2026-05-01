@@ -3,7 +3,7 @@ import tempfile
 import time
 
 import requests
-from typing import Literal
+from typing import List, Literal, Optional
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
@@ -31,6 +31,7 @@ class QueryRequest(BaseModel):
     api_key: str = Field(min_length=1)
     model: str = Field(min_length=1)
     provider: Literal["openai", "ollama_cloud"] = "openai"
+    doc_ids: Optional[List[str]] = None
 
 
 class DeleteRequest(BaseModel):
@@ -121,6 +122,9 @@ def list_documents_endpoint(user_id: str):
     if not user_id.strip():
         return _error_response(400, "invalid_user", "user_id is required")
     docs = list_documents(user_id.strip())
+    for d in docs:
+        if not d.get("filename"):
+            d["filename"] = f"doc-{d['doc_id'][:8]}"
     return {"documents": docs}
 
 
@@ -158,15 +162,21 @@ def list_models_endpoint(provider: str, api_key: str = ""):
 
 @router.post("/query")
 def query_endpoint(request: QueryRequest):
+    # Auto-scope to the user's only document if they have exactly one
+    user_docs = list_documents(request.user_id)
+    auto_doc_ids = [user_docs[0]["doc_id"]] if len(user_docs) == 1 else None
+
     llm = {
         "provider": request.provider,
         "api_key": request.api_key,
         "model": request.model,
     }
 
+    final_doc_ids = request.doc_ids or auto_doc_ids
+
     start = time.perf_counter()
     try:
-        result = run_query(query=request.query, user_id=request.user_id, llm=llm)
+        result = run_query(query=request.query, user_id=request.user_id, llm=llm, doc_ids=final_doc_ids)
     except requests.HTTPError as exc:
         return _handle_upstream_error(exc, "Query")
     except requests.RequestException as exc:

@@ -26,7 +26,7 @@ async function parseResponse(response) {
   return payload
 }
 
-export async function query(query, userId, apiKey, model, provider) {
+export async function query(query, userId, apiKey, model, provider, docIds) {
   const body = {
     query,
     user_id: userId,
@@ -42,6 +42,10 @@ export async function query(query, userId, apiKey, model, provider) {
 
   if (provider?.trim()) {
     body.provider = provider.trim()
+  }
+
+  if (Array.isArray(docIds) && docIds.length) {
+    body.doc_ids = docIds
   }
 
   const response = await fetch(`${API_BASE_URL}/query`, {

@@ -1,10 +1,9 @@
 import { useEffect, useRef } from 'react'
-import { MessageCircle, Paperclip, Sparkles } from 'lucide-react'
+import { FileText, MessageSquare, Shield } from 'lucide-react'
 import MessageBubble from './MessageBubble'
 
-function ChatWindow({ messages }) {
+function ChatWindow({ messages, onDocSelect }) {
   const bottomRef = useRef(null)
-
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
   }, [messages])
@@ -13,32 +12,33 @@ function ChatWindow({ messages }) {
     <main className="chat-window">
       {messages.length === 0 && (
         <div className="empty-state">
-          <h2 className="empty-tagline">DocLens: focused AI chat for documents</h2>
-          <p className="empty-subtitle">Upload once, ask clearly, and get grounded answers.</p>
+          <div className="empty-wordmark">DocLens</div>
+          <p className="empty-tagline">Ask anything about your documents. Get answers cited by source.</p>
 
-          <div className="empty-feature-row" role="list" aria-label="Core features">
-            <div className="empty-feature-item" role="listitem">
-              <Paperclip size={16} aria-hidden="true" />
-              <span>Document Upload</span>
+          <div className="empty-cards">
+            <div className="empty-card">
+              <FileText size={18} className="empty-card-icon" />
+              <div className="empty-card-title">Upload any document</div>
+              <div className="empty-card-desc">PDF, DOCX, or Markdown — any length. Pages are unlimited.</div>
             </div>
-            <div className="empty-feature-item" role="listitem">
-              <MessageCircle size={16} aria-hidden="true" />
-              <span>Context Chat</span>
+            <div className="empty-card">
+              <MessageSquare size={18} className="empty-card-icon" />
+              <div className="empty-card-title">Ask in plain language</div>
+              <div className="empty-card-desc">Summaries, specific facts, comparisons — the model searches and answers.</div>
             </div>
-            <div className="empty-feature-item" role="listitem">
-              <Sparkles size={16} aria-hidden="true" />
-              <span>Source-Aware Answers</span>
+            <div className="empty-card">
+              <Shield size={18} className="empty-card-icon" />
+              <div className="empty-card-title">Your key, your data</div>
+              <div className="empty-card-desc">API keys stay in your browser. Documents expire after 24 hours.</div>
             </div>
           </div>
 
-          <div className="empty-constraints" aria-label="API key required">
-            <span>Add your OpenAI API key and select a model to get started.</span>
-          </div>
+          <p className="empty-privacy">Add your API key in <strong>API Settings</strong> to get started.</p>
         </div>
       )}
 
       {messages.map((message) => (
-        <MessageBubble key={message.id} message={message} />
+        <MessageBubble key={message.id} message={message} onDocSelect={onDocSelect} />
       ))}
 
       <div ref={bottomRef} />

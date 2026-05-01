@@ -4,18 +4,10 @@ import { X } from 'lucide-react'
 
 function InfoModal({ isOpen, onClose, title, children, footer = null }) {
   useEffect(() => {
-    if (!isOpen) {
-      return undefined
-    }
-
-    const onKeyDown = (event) => {
-      if (event.key === 'Escape') {
-        onClose()
-      }
-    }
-
-    document.addEventListener('keydown', onKeyDown)
-    return () => document.removeEventListener('keydown', onKeyDown)
+    if (!isOpen) return
+    const handler = (e) => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', handler)
+    return () => document.removeEventListener('keydown', handler)
   }, [isOpen, onClose])
 
   return (
@@ -27,22 +19,23 @@ function InfoModal({ isOpen, onClose, title, children, footer = null }) {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
+          transition={{ duration: 0.15 }}
         >
           <motion.div
-            className="modal-card"
+            className="modal-box"
             role="dialog"
             aria-modal="true"
             aria-label={title}
-            onClick={(event) => event.stopPropagation()}
-            initial={{ y: 12, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={{ y: 10, opacity: 0 }}
-            transition={{ duration: 0.2, ease: 'easeOut' }}
+            onClick={(e) => e.stopPropagation()}
+            initial={{ y: 10, opacity: 0, scale: 0.98 }}
+            animate={{ y: 0, opacity: 1, scale: 1 }}
+            exit={{ y: 8, opacity: 0 }}
+            transition={{ duration: 0.18, ease: 'easeOut' }}
           >
             <div className="modal-header">
-              <h2>{title}</h2>
-              <button type="button" className="icon-button" onClick={onClose} aria-label="Close modal">
-                <X size={16} />
+              <h2 className="modal-title">{title}</h2>
+              <button type="button" className="modal-close" onClick={onClose} aria-label="Close">
+                <X size={15} />
               </button>
             </div>
 
@@ -51,9 +44,7 @@ function InfoModal({ isOpen, onClose, title, children, footer = null }) {
             {(footer || onClose) && (
               <div className="modal-footer">
                 {footer}
-                <button type="button" className="button" onClick={onClose}>
-                  Close
-                </button>
+                <button type="button" className="button" onClick={onClose}>Close</button>
               </div>
             )}
           </motion.div>

@@ -85,7 +85,7 @@ function InputBar({
                   type="button"
                   className="attachment-remove"
                   aria-label={`Remove ${document.name}`}
-                  disabled={!document.doc_id}
+                  disabled={!document.doc_id || isLocked}
                   title={document.doc_id ? `Remove ${document.name}` : 'Cannot delete document without identifier'}
                   onClick={() => onRequestRemoveDocument(document)}
                 >
@@ -145,7 +145,7 @@ function InputBar({
         <div className="composer-hint">
           {isLocked
             ? 'Working…'
-            : 'Enter to send · Shift + Enter for new line'}
+            : 'Enter to send · Shift+Enter for new line'}
         </div>
         <div className="composer-user-id" title={userId}>
           User ID: {userId}
