@@ -365,6 +365,7 @@ export default function App() {
           byokValidationMessage={byokValidationMessage}
           onApiKeyChange={setApiKey} onModelChange={setSelectedModel}
           onProviderChange={setProvider} onThemeChange={setTheme} onReset={handleReset}
+          userId={userId}
         />
         <ChatWindow messages={chat} onDocSelect={handleDocSelect} />
         <InputBar
