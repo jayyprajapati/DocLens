@@ -1,10 +1,16 @@
-from app.config import CORTEX_BASE_URL, DEFAULT_MODEL
-from services.rag_client import generate as rag_generate
+from app.config import CORTEX_BASE_URL
+from services.rag_client import query as rag_query
 
 
-def run_generate(prompt):
-    return rag_generate(
-        prompt=prompt,
-        model=DEFAULT_MODEL,
+def run_generate(query, user_id, app_name="doclens", llm=None):
+    """
+    Direct generation using Cortex /query (with retrieval).
+    llm: {"provider": "openai", "api_key": "...", "model": "gpt-4o-mini"}
+    """
+    return rag_query(
+        query=query,
+        user_id=user_id,
+        app_name=app_name,
+        llm=llm,
         base_url=CORTEX_BASE_URL,
     )

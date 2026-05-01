@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import ReactMarkdown from 'react-markdown'
-import { Bot, Check, Copy, UserRound } from 'lucide-react'
+import { Bot, Check, Copy, FileText, Search, UserRound, X } from 'lucide-react'
 
 const TYPING_STEP = 2
 const TYPING_INTERVAL = 14
@@ -28,16 +28,96 @@ async function copyToClipboard(text) {
   document.body.removeChild(fallbackTextArea)
 }
 
-function getSourceLabel(source, index) {
-  if (typeof source === 'string') {
-    return source
-  }
+const MAX_SECTION_LEN = 52
 
-  const section = source?.section ? `section ${source.section}` : null
-  const page = source?.page ? `page ${source.page}` : null
-  const docId = source?.doc_id || source?.document || source?.source || null
+function formatSection(raw) {
+  if (!raw || typeof raw !== 'string') return 'Untitled'
+  // Take only the first line — section names from parsed PDFs often run long
+  const firstLine = raw.split(/[\n\r]/)[0].trim()
+  return firstLine.length > MAX_SECTION_LEN
+    ? `${firstLine.slice(0, MAX_SECTION_LEN - 1)}…`
+    : firstLine || 'Untitled'
+}
 
-  return [docId, section, page].filter(Boolean).join(' | ') || `Source ${index + 1}`
+function getSourceKey(source) {
+  const section = typeof source?.section === 'string' ? source.section.trim() : ''
+  const page = source?.page ?? ''
+  return `${section}||${page}`
+}
+
+function deduplicateSources(sources) {
+  const seen = new Set()
+  return sources.filter((s) => {
+    const key = getSourceKey(s)
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
+function StageIcon({ status }) {
+  if (status === 'done')  return <span className="tl-dot tl-done"  aria-hidden="true">✓</span>
+  if (status === 'error') return <span className="tl-dot tl-error" aria-hidden="true"><X size={10} /></span>
+  if (status === 'active') return <span className="tl-dot tl-active" aria-hidden="true"><span className="tl-pulse" /></span>
+  return <span className="tl-dot tl-pending" aria-hidden="true" />
+}
+
+function TimelineMessage({ message }) {
+  const { operation, filename, query, stages = [], result, error } = message
+  const Icon = operation === 'upload' ? FileText : Search
+  const isComplete = result !== null
+  const hasFailed  = Boolean(error)
+
+  const headerLabel = operation === 'upload'
+    ? (filename || 'File upload')
+    : (query ? `"${query.length > 60 ? query.slice(0, 58) + '…' : query}"` : 'Query')
+
+  return (
+    <motion.div
+      className="tl-card"
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.18, ease: 'easeOut' }}
+    >
+      <div className="tl-header">
+        <Icon size={13} className="tl-header-icon" aria-hidden="true" />
+        <span className="tl-header-label">{headerLabel}</span>
+        {isComplete && !hasFailed && <span className="tl-badge tl-badge-ok">Done</span>}
+        {hasFailed && <span className="tl-badge tl-badge-err">Failed</span>}
+      </div>
+
+      <ol className="tl-stages" aria-label="Pipeline stages">
+        {stages.map((stage) => (
+          <li key={stage.id} className={`tl-stage tl-stage-${stage.status}`}>
+            <StageIcon status={stage.status} />
+            <span className="tl-stage-label">{stage.label}</span>
+          </li>
+        ))}
+      </ol>
+
+      {isComplete && !hasFailed && result && (
+        <div className="tl-result">
+          {operation === 'upload' && result.chunk_count != null && (
+            <span>{result.chunk_count} chunks indexed</span>
+          )}
+          {operation === 'query' && (
+            <>
+              {result.retrieved != null && (
+                <span>{result.retrieved} retrieved → {result.reranked ?? result.source_count} ranked</span>
+              )}
+              {result.retrieve_ms != null && (
+                <span>{Math.round(result.retrieve_ms + (result.generate_ms ?? 0))} ms total</span>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
+      {hasFailed && (
+        <div className="tl-error-msg">{error}</div>
+      )}
+    </motion.div>
+  )
 }
 
 function MessageBubble({ message }) {
@@ -98,6 +178,10 @@ function MessageBubble({ message }) {
   const handleCopy = async () => {
     await copyToClipboard(rawContent)
     setIsCopied(true)
+  }
+
+  if (message.role === 'timeline') {
+    return <TimelineMessage message={message} />
   }
 
   if (isSystem) {
@@ -161,11 +245,16 @@ function MessageBubble({ message }) {
               <div className="message-sources">
                 <div className="sources-title">Sources</div>
                 <ul>
-                  {message.sources.map((source, index) => (
-                    <li key={`${getSourceLabel(source, index)}-${index}`}>
-                      {getSourceLabel(source, index)}
-                    </li>
-                  ))}
+                  {deduplicateSources(message.sources).map((source, index) => {
+                    const section = formatSection(source?.section)
+                    const page = source?.page != null ? `p.${source.page}` : null
+                    return (
+                      <li key={`${section}--${page}--${index}`}>
+                        <span className="source-section">{section}</span>
+                        {page && <span className="source-page">{page}</span>}
+                      </li>
+                    )
+                  })}
                 </ul>
               </div>
             )}

@@ -3,54 +3,43 @@ import tempfile
 import time
 
 import requests
-from fastapi import APIRouter, File, Form, UploadFile
+from typing import Literal
+
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
-from pypdf import PdfReader
 from pydantic import BaseModel, Field
 
 from app.services.delete_service import run_delete, run_delete_all
-from app.services.generate_service import run_generate
-from app.services.ingest_service import run_ingest
-from app.services.policy_state import (
-    can_ingest,
-    can_query,
-    get_limits,
-    get_usage_payload,
-    record_query,
+from app.services.document_registry import (
+    list_documents,
     register_document,
     remove_all_documents,
     remove_document,
 )
+from app.services.ingest_service import run_ingest
 from app.services.query_service import run_query
 
 
 router = APIRouter()
 
-FREE_MAX_PAGES = 3
+VALID_PROVIDERS = {"openai", "ollama_cloud"}
 
 
 class QueryRequest(BaseModel):
     query: str
     user_id: str
-    api_key: str | None = None
-    model: str | None = None
-
-
-class GenerateRequest(BaseModel):
-    prompt: str
-    user_id: str | None = None
-    api_key: str | None = None
+    api_key: str = Field(min_length=1)
+    model: str = Field(min_length=1)
+    provider: Literal["openai", "ollama_cloud"] = "openai"
 
 
 class DeleteRequest(BaseModel):
     user_id: str = Field(min_length=1)
     doc_id: str = Field(min_length=1)
-    api_key: str | None = None
 
 
 class DeleteAllRequest(BaseModel):
     user_id: str = Field(min_length=1)
-    api_key: str | None = None
 
 
 def _extract_doc_id(ingest_result):
@@ -63,19 +52,13 @@ def _extract_doc_id(ingest_result):
         ingest_result.get("id"),
     ]
 
-    nested_result = ingest_result.get("result")
-    if isinstance(nested_result, dict):
-        candidates.extend(
-            [
-                nested_result.get("doc_id"),
-                nested_result.get("document_id"),
-                nested_result.get("id"),
-            ]
-        )
+    nested = ingest_result.get("result")
+    if isinstance(nested, dict):
+        candidates += [nested.get("doc_id"), nested.get("document_id"), nested.get("id")]
 
-    for candidate in candidates:
-        if isinstance(candidate, str) and candidate.strip():
-            return candidate.strip()
+    for c in candidates:
+        if isinstance(c, str) and c.strip():
+            return c.strip()
 
     return None
 
@@ -85,17 +68,12 @@ def _safe_duration(value, default_value):
         parsed = float(value)
     except (TypeError, ValueError):
         return round(float(default_value), 4)
-
-    if parsed < 0:
-        return round(float(default_value), 4)
-
-    return round(parsed, 4)
+    return round(parsed, 4) if parsed >= 0 else round(float(default_value), 4)
 
 
 def _build_meta(raw_meta, elapsed_ms):
     if not isinstance(raw_meta, dict):
         raw_meta = {}
-
     return {
         "retrieval_time": _safe_duration(raw_meta.get("retrieval_time"), elapsed_ms),
         "generation_time": _safe_duration(raw_meta.get("generation_time"), 0),
@@ -103,274 +81,173 @@ def _build_meta(raw_meta, elapsed_ms):
 
 
 def _error_response(status_code, error_code, message, extra=None):
-    payload = {
-        "error": error_code,
-        "message": message,
-        "detail": message,
-    }
-
+    payload = {"error": error_code, "message": message, "detail": message}
     if isinstance(extra, dict):
         payload.update(extra)
-
     return JSONResponse(status_code=status_code, content=payload)
 
 
-def _extract_upstream_error(exc):
+def _upstream_detail(exc):
     if isinstance(exc, requests.HTTPError) and exc.response is not None:
         return exc.response.text
     return str(exc)
 
 
-def _count_file_pages(file_path, filename):
-    suffix = os.path.splitext(filename or "")[1].lower()
-    if suffix != ".pdf":
-        return 1
+def _handle_upstream_error(exc, action):
+    """
+    Return the right HTTP status to the browser based on what Cortex returned.
+    - Cortex 4xx (bad key, bad provider, bad request) → 400 to browser (client error)
+    - Cortex 5xx or connectivity failure → 502 to browser (gateway error)
+    """
+    if isinstance(exc, requests.HTTPError) and exc.response is not None:
+        upstream_status = exc.response.status_code
+        if 400 <= upstream_status < 500:
+            return _error_response(
+                400,
+                "upstream_client_error",
+                f"{action} failed: check your API key and provider selection.",
+                {"upstream_detail": exc.response.text},
+            )
+    return _error_response(
+        502,
+        "upstream_error",
+        f"{action} failed: upstream service error.",
+        {"upstream_detail": _upstream_detail(exc)},
+    )
 
-    try:
-        reader = PdfReader(file_path)
-        return len(reader.pages)
-    except Exception:
-        return None
+
+@router.get("/documents")
+def list_documents_endpoint(user_id: str):
+    if not user_id.strip():
+        return _error_response(400, "invalid_user", "user_id is required")
+    docs = list_documents(user_id.strip())
+    return {"documents": docs}
 
 
-def _anonymous_usage_payload(api_key=None):
-    limits = get_limits(api_key)
-    return {
-        "docs": 0,
-        "queries": 0,
-        "limits": {
-            "docs": limits["docs"],
-            "queries": limits["queries"],
-        },
-    }
+_OPENAI_MODELS = ["gpt-4o-mini", "gpt-4o", "gpt-4.1-mini", "gpt-4.1", "o4-mini"]
+_OLLAMA_CLOUD_FALLBACK = ["gpt-oss:120b"]
+
+
+@router.get("/models")
+def list_models_endpoint(provider: str, api_key: str = ""):
+    if provider == "openai":
+        return {"models": _OPENAI_MODELS}
+
+    if provider == "ollama_cloud":
+        if not api_key.strip():
+            return {"models": _OLLAMA_CLOUD_FALLBACK}
+        try:
+            resp = requests.get(
+                "https://ollama.com/api/tags",
+                headers={"Authorization": f"Bearer {api_key.strip()}"},
+                timeout=10,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            names = [
+                m.get("name") or m.get("model")
+                for m in data.get("models", [])
+            ]
+            models = sorted(n for n in names if n)
+            return {"models": models or _OLLAMA_CLOUD_FALLBACK}
+        except Exception:
+            return {"models": _OLLAMA_CLOUD_FALLBACK}
+
+    return _error_response(400, "invalid_provider", f"Unknown provider: {provider!r}")
 
 
 @router.post("/query")
 def query_endpoint(request: QueryRequest):
-    if not can_query(request.user_id, request.api_key):
-        return _error_response(
-            status_code=429,
-            error_code="QUOTA_EXCEEDED",
-            message="Free quota exhausted. Use your API key to continue.",
-            extra={"usage": get_usage_payload(request.user_id, request.api_key)},
-        )
-
-    llm_config = {}
-    if request.api_key:
-        llm_config["api_key"] = request.api_key
-    if request.model:
-        llm_config["model"] = request.model
+    llm = {
+        "provider": request.provider,
+        "api_key": request.api_key,
+        "model": request.model,
+    }
 
     start = time.perf_counter()
-
     try:
-        result = run_query(
-            query=request.query,
-            user_id=request.user_id,
-            app_name="doclens",
-            llm_config=llm_config or None,
-        )
+        result = run_query(query=request.query, user_id=request.user_id, llm=llm)
     except requests.HTTPError as exc:
-        return _error_response(
-            status_code=502,
-            error_code="upstream_query_error",
-            message="Failed to run document query.",
-            extra={"upstream_detail": _extract_upstream_error(exc)},
-        )
+        return _handle_upstream_error(exc, "Query")
     except requests.RequestException as exc:
-        return _error_response(
-            status_code=502,
-            error_code="upstream_query_error",
-            message="Failed to run document query.",
-            extra={"upstream_detail": _extract_upstream_error(exc)},
-        )
+        return _error_response(502, "upstream_error", "Query failed: could not reach Cortex.",
+                               {"upstream_detail": str(exc)})
 
     elapsed_ms = (time.perf_counter() - start) * 1000
-    record_query(request.user_id)
-
     payload = dict(result) if isinstance(result, dict) else {"result": result}
     payload["meta"] = _build_meta(payload.get("meta"), elapsed_ms)
-    payload["usage"] = get_usage_payload(request.user_id, request.api_key)
     return payload
 
 
-
 @router.post("/ingest")
-async def ingest_endpoint(file: UploadFile = File(...), user_id: str = Form(...), api_key: str | None = Form(None)):
-    start = time.perf_counter()
-
-    if not can_ingest(user_id, api_key):
-        return _error_response(
-            status_code=429,
-            error_code="QUOTA_EXCEEDED",
-            message="Free quota exhausted. Use your API key to continue.",
-            extra={"usage": get_usage_payload(user_id, api_key)},
-        )
+async def ingest_endpoint(
+    file: UploadFile = File(...),
+    user_id: str = Form(...),
+    api_key: str = Form(...),
+):
+    if not api_key.strip():
+        return _error_response(400, "byok_required", "API key is required to upload documents.")
 
     temp_path = None
-    page_count = None
+    start = time.perf_counter()
 
     try:
         suffix = os.path.splitext(file.filename or "")[1]
-        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as temp_file:
-            temp_path = temp_file.name
-            content = await file.read()
-            temp_file.write(content)
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+            temp_path = tmp.name
+            tmp.write(await file.read())
 
-        if not (api_key or "").strip():
-            page_count = _count_file_pages(temp_path, file.filename)
-            if page_count is None:
-                return _error_response(
-                    status_code=400,
-                    error_code="page_count_unavailable",
-                    message="Unable to determine page count for this file.",
-                )
-
-            if page_count > FREE_MAX_PAGES:
-                return _error_response(
-                    status_code=400,
-                    error_code="page_limit_exceeded",
-                    message="Free tier supports up to 3 pages per document.",
-                    extra={"page_count": page_count, "max_pages": FREE_MAX_PAGES},
-                )
-
-        result = run_ingest(
-            file_path=temp_path,
-            user_id=user_id,
-            app_name="doclens",
-        )
+        result = run_ingest(file_path=temp_path, user_id=user_id, app_name="doclens")
 
         doc_id = _extract_doc_id(result)
         if not doc_id:
-            return _error_response(
-                status_code=500,
-                error_code="missing_doc_id",
-                message="Ingest response missing doc_id.",
-            )
+            return _error_response(500, "missing_doc_id", "Ingest response missing doc_id.")
 
         register_document(user_id=user_id, doc_id=doc_id, filename=file.filename)
 
         elapsed_ms = (time.perf_counter() - start) * 1000
-
         return {
             "status": "success",
             "doc_id": doc_id,
-            "usage": get_usage_payload(user_id, api_key),
             "meta": _build_meta({}, elapsed_ms),
         }
+
     except requests.HTTPError as exc:
-        return _error_response(
-            status_code=502,
-            error_code="upstream_ingest_error",
-            message="Failed to ingest document.",
-            extra={"upstream_detail": _extract_upstream_error(exc)},
-        )
+        return _handle_upstream_error(exc, "Ingest")
     except requests.RequestException as exc:
-        return _error_response(
-            status_code=502,
-            error_code="upstream_ingest_error",
-            message="Failed to ingest document.",
-            extra={"upstream_detail": _extract_upstream_error(exc)},
-        )
+        return _error_response(502, "upstream_error", "Ingest failed: could not reach Cortex.",
+                               {"upstream_detail": str(exc)})
     finally:
         await file.close()
         if temp_path and os.path.exists(temp_path):
             os.remove(temp_path)
 
 
-@router.post("/generate")
-def generate_endpoint(request: GenerateRequest):
-    start = time.perf_counter()
-
-    try:
-        result = run_generate(prompt=request.prompt)
-        elapsed_ms = (time.perf_counter() - start) * 1000
-        return {
-            "status": "success",
-            "result": result,
-            "usage": get_usage_payload(request.user_id, request.api_key)
-            if request.user_id
-            else _anonymous_usage_payload(request.api_key),
-            "meta": _build_meta({}, elapsed_ms),
-        }
-    except requests.HTTPError as exc:
-        return _error_response(
-            status_code=502,
-            error_code="upstream_generate_error",
-            message="Failed to generate response.",
-            extra={"upstream_detail": _extract_upstream_error(exc)},
-        )
-    except requests.RequestException as exc:
-        return _error_response(
-            status_code=502,
-            error_code="upstream_generate_error",
-            message="Failed to generate response.",
-            extra={"upstream_detail": _extract_upstream_error(exc)},
-        )
-
-
 @router.post("/delete")
 def delete_endpoint(request: DeleteRequest):
     start = time.perf_counter()
-
     try:
-        result = run_delete(
-            user_id=request.user_id,
-            doc_id=request.doc_id,
-            app_name="doclens",
-        )
+        result = run_delete(user_id=request.user_id, doc_id=request.doc_id, app_name="doclens")
         remove_document(user_id=request.user_id, doc_id=request.doc_id)
         elapsed_ms = (time.perf_counter() - start) * 1000
-        return {
-            "status": "success",
-            "result": result,
-            "usage": get_usage_payload(request.user_id, request.api_key),
-            "meta": _build_meta({}, elapsed_ms),
-        }
+        return {"status": "success", "result": result, "meta": _build_meta({}, elapsed_ms)}
     except requests.HTTPError as exc:
-        return _error_response(
-            status_code=502,
-            error_code="upstream_delete_error",
-            message="Failed to delete document.",
-            extra={"upstream_detail": _extract_upstream_error(exc)},
-        )
+        return _handle_upstream_error(exc, "Delete")
     except requests.RequestException as exc:
-        return _error_response(
-            status_code=502,
-            error_code="upstream_delete_error",
-            message="Failed to delete document.",
-            extra={"upstream_detail": _extract_upstream_error(exc)},
-        )
+        return _error_response(502, "upstream_error", "Delete failed: could not reach Cortex.",
+                               {"upstream_detail": str(exc)})
 
 
 @router.post("/delete_all")
 def delete_all_endpoint(request: DeleteAllRequest):
     start = time.perf_counter()
-
     try:
-        result = run_delete_all(
-            user_id=request.user_id,
-            app_name="doclens",
-        )
+        result = run_delete_all(user_id=request.user_id, app_name="doclens")
         remove_all_documents(user_id=request.user_id)
         elapsed_ms = (time.perf_counter() - start) * 1000
-        return {
-            "status": "success",
-            "result": result,
-            "usage": get_usage_payload(request.user_id, request.api_key),
-            "meta": _build_meta({}, elapsed_ms),
-        }
+        return {"status": "success", "result": result, "meta": _build_meta({}, elapsed_ms)}
     except requests.HTTPError as exc:
-        return _error_response(
-            status_code=502,
-            error_code="upstream_delete_error",
-            message="Failed to delete documents.",
-            extra={"upstream_detail": _extract_upstream_error(exc)},
-        )
+        return _handle_upstream_error(exc, "Delete all")
     except requests.RequestException as exc:
-        return _error_response(
-            status_code=502,
-            error_code="upstream_delete_error",
-            message="Failed to delete documents.",
-            extra={"upstream_detail": _extract_upstream_error(exc)},
-        )
+        return _error_response(502, "upstream_error", "Delete all failed: could not reach Cortex.",
+                               {"upstream_detail": str(exc)})

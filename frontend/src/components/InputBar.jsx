@@ -143,13 +143,9 @@ function InputBar({
 
       <div className="composer-meta" aria-live="polite">
         <div className="composer-hint">
-          {loadingState === 'retrieving' && loadingTask === 'upload'
-            ? 'Uploading and indexing your document...'
-            : loadingState === 'retrieving'
-              ? 'Searching your document...'
-              : loadingState === 'generating'
-                ? 'Generating answer...'
-                : 'Enter for send message, Shift + Enter for a new line.'}
+          {isLocked
+            ? 'Working…'
+            : 'Enter to send · Shift + Enter for new line'}
         </div>
         <div className="composer-user-id" title={userId}>
           User ID: {userId}

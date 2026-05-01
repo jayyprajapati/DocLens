@@ -26,7 +26,7 @@ async function parseResponse(response) {
   return payload
 }
 
-export async function query(query, userId, apiKey, model) {
+export async function query(query, userId, apiKey, model, provider) {
   const body = {
     query,
     user_id: userId,
@@ -38,6 +38,10 @@ export async function query(query, userId, apiKey, model) {
 
   if (model?.trim()) {
     body.model = model.trim()
+  }
+
+  if (provider?.trim()) {
+    body.provider = provider.trim()
   }
 
   const response = await fetch(`${API_BASE_URL}/query`, {
@@ -97,6 +101,19 @@ export async function deleteDocument(userId, docId, apiKey) {
     body: JSON.stringify(body),
   })
 
+  return parseResponse(response)
+}
+
+export async function getDocuments(userId) {
+  const params = new URLSearchParams({ user_id: userId })
+  const response = await fetch(`${API_BASE_URL}/documents?${params}`)
+  return parseResponse(response)
+}
+
+export async function fetchModels(provider, apiKey) {
+  const params = new URLSearchParams({ provider })
+  if (apiKey?.trim()) params.append('api_key', apiKey.trim())
+  const response = await fetch(`${API_BASE_URL}/models?${params}`)
   return parseResponse(response)
 }
 
