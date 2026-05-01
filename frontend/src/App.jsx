@@ -103,7 +103,7 @@ export default function App() {
   const [apiKey, setApiKey]           = useState(() => localStorage.getItem(STORAGE_KEYS.apiKey) || '')
   const [selectedModel, setSelectedModel] = useState(() => localStorage.getItem(STORAGE_KEYS.selectedModel) || '')
   const [provider, setProvider]       = useState(() => localStorage.getItem(STORAGE_KEYS.provider) || '')
-  const [theme, setTheme]             = useState(() => localStorage.getItem(STORAGE_KEYS.theme) || 'system')
+  const [theme, setTheme]             = useState(() => localStorage.getItem(STORAGE_KEYS.theme) || 'light')
 
   const [chat, setChat]               = useState([])
   const [documents, setDocuments]     = useState([])

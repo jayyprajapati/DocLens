@@ -20,7 +20,7 @@ const API_KEY_PLACEHOLDER = {
   '': 'Select a provider first',
 }
 
-const THEME_CYCLE = { light: 'dark', dark: 'system', system: 'light' }
+const THEME_CYCLE = { light: 'dark', dark: 'light', system: 'light' }
 
 function ThemeIcon({ theme }) {
   if (theme === 'light')  return <Sun size={15} />
