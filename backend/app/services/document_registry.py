@@ -37,14 +37,31 @@ def _write_registry(data):
     REGISTRY_PATH.write_text(json.dumps(data, indent=2), encoding="utf-8")
 
 
-def register_document(user_id, doc_id):
+def register_document(user_id, doc_id, filename=None):
     now_iso = datetime.now(timezone.utc).isoformat()
 
     with _registry_lock:
         registry = _read_registry()
         user_docs = registry["users"].setdefault(user_id, {})
-        user_docs[doc_id] = {"uploaded_at": now_iso}
+        user_docs[doc_id] = {
+            "uploaded_at": now_iso,
+            "filename": (filename or "").strip() or None,
+        }
         _write_registry(registry)
+
+
+def list_documents(user_id):
+    with _registry_lock:
+        registry = _read_registry()
+        user_docs = registry["users"].get(user_id, {})
+        result = []
+        for doc_id, meta in user_docs.items():
+            result.append({
+                "doc_id": doc_id,
+                "filename": meta.get("filename"),
+                "uploaded_at": meta.get("uploaded_at"),
+            })
+        return result
 
 
 def remove_document(user_id, doc_id):
