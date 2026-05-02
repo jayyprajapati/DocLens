@@ -1,4 +1,5 @@
 import asyncio
+import os
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -7,7 +8,13 @@ from app.api.routes import router
 from app.services.cleanup_service import cleanup_forever
 
 
-app = FastAPI(title="DocLens API")
+_env = os.getenv("APP_ENV") or os.getenv("ENV") or os.getenv("PYTHON_ENV") or "development"
+_is_prod = str(_env).lower() in ("production", "prod")
+
+app = FastAPI(
+    title="DocLens API",
+    **({"docs_url": None, "redoc_url": None, "openapi_url": None} if _is_prod else {}),
+)
 app.state.cleanup_stop_event = asyncio.Event()
 app.state.cleanup_task = None
 
