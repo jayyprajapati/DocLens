@@ -59,6 +59,56 @@ export async function query(query, userId, apiKey, model, provider, docIds) {
   return parseResponse(response)
 }
 
+export async function chat({ query, userId, apiKey, model, provider, threadId, docIds }) {
+  const body = {
+    query,
+    user_id: userId,
+  }
+
+  if (apiKey?.trim()) body.api_key = apiKey.trim()
+  if (model?.trim()) body.model = model.trim()
+  if (provider?.trim()) body.provider = provider.trim()
+  if (threadId) body.thread_id = threadId
+  if (Array.isArray(docIds) && docIds.length) body.doc_ids = docIds
+
+  const response = await fetch(`${API_BASE_URL}/chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  return parseResponse(response)
+}
+
+export async function listThreads(userId) {
+  const params = new URLSearchParams({ user_id: userId })
+  const response = await fetch(`${API_BASE_URL}/threads?${params}`)
+  return parseResponse(response)
+}
+
+export async function getThread(threadId, userId) {
+  const params = new URLSearchParams({ user_id: userId })
+  const response = await fetch(`${API_BASE_URL}/threads/${threadId}?${params}`)
+  return parseResponse(response)
+}
+
+export async function deleteThread(threadId, userId) {
+  const params = new URLSearchParams({ user_id: userId })
+  const response = await fetch(`${API_BASE_URL}/threads/${threadId}?${params}`, {
+    method: 'DELETE',
+  })
+  return parseResponse(response)
+}
+
+export async function renameThread(threadId, userId, title) {
+  const params = new URLSearchParams({ user_id: userId })
+  const response = await fetch(`${API_BASE_URL}/threads/${threadId}?${params}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ title }),
+  })
+  return parseResponse(response)
+}
+
 export async function ingest(file, userId, apiKey) {
   const formData = new FormData()
   formData.append('file', file)

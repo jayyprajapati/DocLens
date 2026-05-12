@@ -2,6 +2,26 @@ import { useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import ReactMarkdown from 'react-markdown'
 import { Bot, Check, Copy, FileText, Search, UserRound } from 'lucide-react'
+import CitationDrawer from './CitationDrawer'
+
+// Convert [N] citation markers to markdown links so ReactMarkdown can intercept them.
+// e.g. "see [1] and [2, 3]" → "see [¹](cit://1) and [²](cit://2) [³](cit://3)"
+const CITATION_RE = /\[(\d+(?:\s*,\s*\d+)*)\]/g
+
+function superscriptDigit(n) {
+  const map = { 0:'⁰',1:'¹',2:'²',3:'³',4:'⁴',5:'⁵',6:'⁶',7:'⁷',8:'⁸',9:'⁹' }
+  return String(n).split('').map(c => map[c] || c).join('')
+}
+
+function preprocess(text) {
+  if (!text) return ''
+  return text.replace(CITATION_RE, (_, inner) => {
+    return inner.split(',').map(s => {
+      const n = s.trim()
+      return `[${superscriptDigit(n)}](cit://${n})`
+    }).join(' ')
+  })
+}
 
 const TYPING_STEP = 3
 const TYPING_INTERVAL = 12
@@ -88,9 +108,33 @@ function SourceList({ sources }) {
   )
 }
 
+// Custom link component: intercepts cit://N links and renders as superscript citation buttons.
+function makeCitationLinkComponent(sources, openCitation) {
+  return function CitLink({ href, children }) {
+    if (href && href.startsWith('cit://')) {
+      const n = parseInt(href.slice(6), 10)
+      const source = Array.isArray(sources) ? sources[n - 1] : null
+      return (
+        <sup>
+          <button
+            type="button"
+            className="cit-sup-btn"
+            onClick={() => source && openCitation({ index: n, ...source })}
+            title={source ? `Source ${n}: ${source.section || ''}` : `Source ${n}`}
+          >
+            {children}
+          </button>
+        </sup>
+      )
+    }
+    return <a href={href} target="_blank" rel="noopener noreferrer">{children}</a>
+  }
+}
+
 // Typing animation for the embedded answer inside a timeline thread
 function AnswerBlock({ answer, sources, retrieveMs, generateMs }) {
   const [typed, setTyped] = useState('')
+  const [activeCitation, setActiveCitation] = useState(null)
 
   useEffect(() => {
     if (!answer) return
@@ -109,10 +153,18 @@ function AnswerBlock({ answer, sources, retrieveMs, generateMs }) {
     ? (((retrieveMs || 0) + (generateMs || 0)) / 1000).toFixed(1)
     : null
 
+  const citLink = useMemo(
+    () => makeCitationLinkComponent(sources, setActiveCitation),
+    [sources],
+  )
+
   return (
     <div className="tl-answer-body">
-      <ReactMarkdown>{typed}</ReactMarkdown>
+      <ReactMarkdown components={{ a: citLink }}>{preprocess(typed)}</ReactMarkdown>
       {isTyping && <span className="typing-cursor" aria-hidden="true" />}
+      {activeCitation && (
+        <CitationDrawer citation={activeCitation} onClose={() => setActiveCitation(null)} />
+      )}
       {!isTyping && sources?.length > 0 && <SourceList sources={sources} />}
       {!isTyping && answer && (
         <div className="tl-answer-footer">
@@ -267,13 +319,15 @@ function MessageBubble({ message, onDocSelect }) {
   const isDocSelect = message.role === 'doc-select'
   const hasSources  = isAssistant && Array.isArray(message.sources) && message.sources.length > 0
 
+  const skipTyping = Boolean(message.skipTyping)
   const [typedContent, setTypedContent] = useState(
-    isAssistant ? '' : typeof message.content === 'string' ? message.content : '',
+    isAssistant && !skipTyping ? '' : typeof message.content === 'string' ? message.content : '',
   )
+  const [activeCitation, setActiveCitation] = useState(null)
 
   useEffect(() => {
     const content = typeof message.content === 'string' ? message.content : ''
-    if (!isAssistant) { setTypedContent(content); return }
+    if (!isAssistant || skipTyping) { setTypedContent(content); return }
     let i = 0
     setTypedContent('')
     const iv = setInterval(() => {
@@ -282,13 +336,18 @@ function MessageBubble({ message, onDocSelect }) {
       if (i >= content.length) clearInterval(iv)
     }, TYPING_INTERVAL)
     return () => clearInterval(iv)
-  }, [isAssistant, message.content, message.id])
+  }, [isAssistant, message.content, message.id, skipTyping])
 
   const isTyping = isAssistant && typedContent.length < (message.content?.length || 0)
   const displayContent = useMemo(() => {
     if (isAssistant) return typedContent
     return typeof message.content === 'string' ? message.content : ''
   }, [isAssistant, message.content, typedContent])
+
+  const citLink = useMemo(
+    () => makeCitationLinkComponent(message.sources, setActiveCitation),
+    [message.sources],
+  )
 
   if (isTimeline)  return <TimelineMessage message={message} />
   if (isDocSelect) return <DocSelectMessage message={message} onDocSelect={onDocSelect} />
@@ -317,8 +376,11 @@ function MessageBubble({ message, onDocSelect }) {
         <div className={`msg-bubble ${isUser ? 'bubble-user' : 'bubble-assistant'}`}>
           {isUser
             ? <p>{displayContent}</p>
-            : <ReactMarkdown>{displayContent}</ReactMarkdown>}
+            : <ReactMarkdown components={{ a: citLink }}>{preprocess(displayContent)}</ReactMarkdown>}
           {isTyping && <span className="typing-cursor" aria-hidden="true" />}
+          {isAssistant && activeCitation && (
+            <CitationDrawer citation={activeCitation} onClose={() => setActiveCitation(null)} />
+          )}
           {isAssistant && hasSources && !isTyping && <SourceList sources={message.sources} />}
         </div>
         <CopyButton text={rawContent} />

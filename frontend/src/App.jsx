@@ -5,7 +5,19 @@ import ChatWindow from './components/ChatWindow'
 import InputBar from './components/InputBar'
 import InfoModal from './components/InfoModal'
 import AppFooter from './components/AppFooter'
-import { deleteAllDocuments, deleteDocument, getDocuments, ingest, query } from './services/api'
+import ThreadSidebar from './components/ThreadSidebar'
+import {
+  chat as chatApi,
+  deleteAllDocuments,
+  deleteDocument,
+  deleteThread,
+  getDocuments,
+  getThread,
+  ingest,
+  listThreads,
+  query as queryApi,
+  renameThread,
+} from './services/api'
 import './App.css'
 
 const STORAGE_KEYS = {
@@ -14,6 +26,8 @@ const STORAGE_KEYS = {
   selectedModel: 'doclens_selected_model',
   provider: 'doclens_provider',
   theme: 'doclens_theme',
+  activeThreadId: 'doclens_active_thread_id',
+  sidebarOpen: 'doclens_sidebar_open',
 }
 
 const UPLOAD_STAGES = [
@@ -112,6 +126,15 @@ export default function App() {
   const [documentPendingDeletion, setDocumentPendingDeletion] = useState(null)
   const [isDeletingDocument, setIsDeletingDocument] = useState(false)
 
+  const [activeThreadId, setActiveThreadId] = useState(
+    () => localStorage.getItem(STORAGE_KEYS.activeThreadId) || null,
+  )
+  const [threads, setThreads] = useState([])
+  const [isSidebarOpen, setIsSidebarOpen] = useState(
+    () => localStorage.getItem(STORAGE_KEYS.sidebarOpen) !== 'false',
+  )
+  const [threadPendingDeletion, setThreadPendingDeletion] = useState(null)
+
   const stageTimerRef = useRef(null)
 
   const byokValidationMessage = getByokValidationMessage(apiKey, selectedModel, provider)
@@ -130,6 +153,11 @@ export default function App() {
   useEffect(() => { localStorage.setItem(STORAGE_KEYS.selectedModel, selectedModel) }, [selectedModel])
   useEffect(() => { localStorage.setItem(STORAGE_KEYS.provider, provider) }, [provider])
   useEffect(() => { localStorage.setItem(STORAGE_KEYS.theme, theme) }, [theme])
+  useEffect(() => { localStorage.setItem(STORAGE_KEYS.sidebarOpen, String(isSidebarOpen)) }, [isSidebarOpen])
+  useEffect(() => {
+    if (activeThreadId) localStorage.setItem(STORAGE_KEYS.activeThreadId, activeThreadId)
+    else localStorage.removeItem(STORAGE_KEYS.activeThreadId)
+  }, [activeThreadId])
 
   // Load persisted documents on mount
   useEffect(() => {
@@ -144,6 +172,41 @@ export default function App() {
       if (docs.length) setDocuments(docs)
     }).catch(() => {})
   }, [userId])
+
+  // Load threads list on mount
+  const refreshThreads = async () => {
+    try {
+      const data = await listThreads(userId)
+      setThreads(Array.isArray(data?.threads) ? data.threads : [])
+    } catch {
+      setThreads([])
+    }
+  }
+
+  useEffect(() => { refreshThreads() }, [userId])
+
+  // If we have a persisted activeThreadId, hydrate its messages on mount
+  useEffect(() => {
+    if (!activeThreadId) return
+    let cancelled = false
+    getThread(activeThreadId, userId).then((data) => {
+      if (cancelled || !data) return
+      const loaded = (data.messages || []).map((m) => ({
+        id: `msg-${m.id}`,
+        role: m.role,
+        content: m.content,
+        sources: m.citations || [],
+        skipTyping: true,
+      }))
+      setChat(loaded)
+    }).catch(() => {
+      // Thread gone — clear stale id
+      setActiveThreadId(null)
+      setChat([])
+    })
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // ─── message helpers ────────────────────────────────────────────
   const addMessage = (msg) => setChat((prev) => [...prev, msg])
@@ -199,7 +262,83 @@ export default function App() {
     }))
   }
 
+  // ─── auto-rename new threads ────────────────────────────────────
+  async function autoNameThread(threadId, userMessage, docIds) {
+    const prompt = `In 4-6 words, what is this conversation about? Reply with only the title, no quotes or punctuation. The user asked: "${userMessage.slice(0, 200)}"`
+    try {
+      const result = await queryApi(prompt, userId, apiKey, selectedModel, provider, docIds?.length ? docIds : null)
+      const raw = (result?.answer || '').trim()
+      const title = raw.split('\n')[0].replace(/^["']|["'.!?,]$/g, '').trim().slice(0, 60)
+      if (title.length >= 3) {
+        await renameThread(threadId, userId, title)
+        refreshThreads()
+      }
+    } catch {
+      // silent — thread keeps default title
+    }
+  }
+
   // ─── handlers ───────────────────────────────────────────────────
+  async function runChatTurn(text, { docIds } = {}) {
+    const timelineId = uuidv4()
+    addMessage({
+      id: timelineId,
+      role: 'timeline',
+      operation: 'query',
+      query: docIds ? `${text} [scoped]` : text,
+      stages: buildStages(QUERY_STAGES),
+      result: null,
+      error: null,
+    })
+
+    setLoadingState('retrieving')
+    startStageProgress(timelineId, QUERY_STAGES, QUERY_PACE)
+
+    try {
+      const result = await chatApi({
+        query: text,
+        userId,
+        apiKey,
+        model: selectedModel,
+        provider,
+        threadId: activeThreadId,
+        docIds,
+      })
+
+      // Pick up new thread id if Cortex just created one
+      const isNewThread = !activeThreadId && result?.thread_id
+      if (result?.thread_id && result.thread_id !== activeThreadId) {
+        setActiveThreadId(result.thread_id)
+      }
+
+      // Auto-name the thread in the background after the first exchange
+      if (isNewThread) {
+        autoNameThread(result.thread_id, text, docIds)
+      }
+
+      const meta = result?.meta || {}
+      completeStages(timelineId, {
+        retrieved: meta.retrieved_count ?? null,
+        reranked: meta.reranked_count ?? null,
+        retrieve_ms: meta.retrieve_ms ?? null,
+        generate_ms: meta.generate_ms ?? null,
+        answer: typeof result?.answer === 'string'
+          ? result.answer
+          : (result?.answer && JSON.stringify(result.answer)) || 'No response returned.',
+        sources: Array.isArray(result?.citations) && result.citations.length
+          ? result.citations
+          : (Array.isArray(result?.sources) ? result.sources : []),
+        grounded: result?.grounded ?? null,
+      })
+
+      refreshThreads()
+    } catch (error) {
+      failStages(timelineId, extractBestError(error))
+    } finally {
+      setLoadingState('idle')
+    }
+  }
+
   const handleSend = async (text) => {
     if (!text.trim() || inputLocked) return
     if (!isByokReady) {
@@ -209,8 +348,9 @@ export default function App() {
     setInlineFeedback(null)
     addMessage({ id: uuidv4(), role: 'user', content: text })
 
-    // Multi-doc clarification: if user has multiple docs and query is ambiguous
-    if (documents.length > 1 && AMBIGUOUS_DOC_RE.test(text)) {
+    // Multi-doc clarification — only fires on a fresh thread (no thread_id yet).
+    // Once a thread is established, its doc_ids are fixed server-side.
+    if (!activeThreadId && documents.length > 1 && AMBIGUOUS_DOC_RE.test(text)) {
       addMessage({
         id: uuidv4(),
         role: 'doc-select',
@@ -220,69 +360,55 @@ export default function App() {
       return
     }
 
-    const timelineId = uuidv4()
-    addMessage({
-      id: timelineId,
-      role: 'timeline',
-      operation: 'query',
-      query: text,
-      stages: buildStages(QUERY_STAGES),
-      result: null,
-      error: null,
-    })
-
-    setLoadingState('retrieving')
-    startStageProgress(timelineId, QUERY_STAGES, QUERY_PACE)
-
-    try {
-      const result = await query(text, userId, apiKey, selectedModel, provider)
-      const meta = result?.meta || {}
-      completeStages(timelineId, {
-        retrieved: meta.retrieved_count ?? null,
-        reranked: meta.reranked_count ?? null,
-        retrieve_ms: meta.retrieve_ms ?? null,
-        generate_ms: meta.generate_ms ?? null,
-        answer: result?.answer || result?.response || 'No response returned.',
-        sources: Array.isArray(result?.sources) ? result.sources : [],
-      })
-    } catch (error) {
-      failStages(timelineId, extractBestError(error))
-    } finally {
-      setLoadingState('idle')
-    }
+    await runChatTurn(text)
   }
 
   // Called when user picks a document in the doc-select message
-  const handleDocSelect = async (docId, docName, originalQuery) => {
-    const timelineId = uuidv4()
-    addMessage({
-      id: timelineId,
-      role: 'timeline',
-      operation: 'query',
-      query: `${originalQuery} [in ${docName}]`,
-      stages: buildStages(QUERY_STAGES),
-      result: null,
-      error: null,
-    })
+  const handleDocSelect = async (docId, _docName, originalQuery) => {
+    await runChatTurn(originalQuery, { docIds: [docId] })
+  }
 
-    setLoadingState('retrieving')
-    startStageProgress(timelineId, QUERY_STAGES, QUERY_PACE)
+  const handleNewChat = () => {
+    setActiveThreadId(null)
+    setChat([])
+    setInlineFeedback(null)
+  }
 
+  const handleSelectThread = async (threadId) => {
+    if (threadId === activeThreadId) return
     try {
-      const result = await query(originalQuery, userId, apiKey, selectedModel, provider, [docId])
-      const meta = result?.meta || {}
-      completeStages(timelineId, {
-        retrieved: meta.retrieved_count ?? null,
-        reranked: meta.reranked_count ?? null,
-        retrieve_ms: meta.retrieve_ms ?? null,
-        generate_ms: meta.generate_ms ?? null,
-        answer: result?.answer || result?.response || 'No response returned.',
-        sources: Array.isArray(result?.sources) ? result.sources : [],
-      })
-    } catch (error) {
-      failStages(timelineId, extractBestError(error))
-    } finally {
-      setLoadingState('idle')
+      const data = await getThread(threadId, userId)
+      const loaded = (data?.messages || []).map((m) => ({
+        id: `msg-${m.id}`,
+        role: m.role,
+        content: m.content,
+        sources: m.citations || [],
+        skipTyping: true,
+      }))
+      setChat(loaded)
+      setActiveThreadId(threadId)
+    } catch {
+      setInlineFeedback({ tone: 'error', content: 'Could not load chat history.' })
+    }
+  }
+
+  const handleDeleteThread = (threadId) => {
+    setThreadPendingDeletion(threadId)
+  }
+
+  const confirmDeleteThread = async () => {
+    if (!threadPendingDeletion) return
+    const tid = threadPendingDeletion
+    setThreadPendingDeletion(null)
+    try {
+      await deleteThread(tid, userId)
+      if (tid === activeThreadId) {
+        setActiveThreadId(null)
+        setChat([])
+      }
+      refreshThreads()
+    } catch {
+      setInlineFeedback({ tone: 'error', content: 'Could not delete chat.' })
     }
   }
 
@@ -360,12 +486,34 @@ export default function App() {
   return (
     <div className="app-page">
       <div className="app-shell">
+        <ThreadSidebar
+          threads={threads}
+          activeThreadId={activeThreadId}
+          onSelect={handleSelectThread}
+          onNewChat={handleNewChat}
+          onDelete={handleDeleteThread}
+          isOpen={isSidebarOpen}
+          onClose={() => setIsSidebarOpen(false)}
+          theme={theme}
+          onThemeChange={setTheme}
+          userId={userId}
+          apiKey={apiKey}
+          model={selectedModel}
+          provider={provider}
+          byokValidationMessage={byokValidationMessage}
+          onApiKeyChange={setApiKey}
+          onModelChange={setSelectedModel}
+          onProviderChange={setProvider}
+          onReset={handleReset}
+        />
+        <div className="app-shell-main">
         <Header
-          apiKey={apiKey} model={selectedModel} provider={provider} theme={theme}
+          apiKey={apiKey} model={selectedModel} provider={provider}
           byokValidationMessage={byokValidationMessage}
           onApiKeyChange={setApiKey} onModelChange={setSelectedModel}
-          onProviderChange={setProvider} onThemeChange={setTheme} onReset={handleReset}
-          userId={userId}
+          onProviderChange={setProvider} onReset={handleReset}
+          isSidebarOpen={isSidebarOpen}
+          onSidebarToggle={() => setIsSidebarOpen((v) => !v)}
         />
         <ChatWindow messages={chat} onDocSelect={handleDocSelect} />
         <InputBar
@@ -393,6 +541,19 @@ export default function App() {
           <p>This will permanently delete this document from the index.</p>
           {documentPendingDeletion?.name && <p><strong>{documentPendingDeletion.name}</strong></p>}
         </InfoModal>
+        <InfoModal
+          isOpen={Boolean(threadPendingDeletion)}
+          onClose={() => setThreadPendingDeletion(null)}
+          title="Delete chat"
+          footer={
+            <button type="button" className="button button-danger" onClick={confirmDeleteThread}>
+              Delete permanently
+            </button>
+          }
+        >
+          <p>This will permanently delete this conversation and all its messages.</p>
+        </InfoModal>
+        </div>
       </div>
     </div>
   )

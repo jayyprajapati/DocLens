@@ -140,17 +140,6 @@ function InputBar({
           <SendHorizontal size={16} />
         </button>
       </div>
-
-      <div className="composer-meta" aria-live="polite">
-        <div className="composer-hint">
-          {isLocked
-            ? 'Working…'
-            : 'Enter to send · Shift+Enter for new line'}
-        </div>
-        <div className="composer-user-id" title={userId}>
-          User ID: {userId}
-        </div>
-      </div>
     </div>
   )
 }

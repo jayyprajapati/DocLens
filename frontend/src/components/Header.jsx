@@ -1,10 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { Bot, ChevronDown, ExternalLink, Eye, EyeOff, FileSearchCorner, Info, KeyRound, Menu, Moon, RefreshCw, Sun, X } from 'lucide-react'
-import { Link } from 'react-router-dom'
+import { Bot, ChevronDown, Eye, EyeOff, FileSearchCorner, Info, KeyRound, Menu, RefreshCw } from 'lucide-react'
 import InfoModal from './InfoModal'
 import { fetchModels } from '../services/api'
-
-const PORTFOLIO_URL = 'https://github.com/jayyprajapati'
 
 const PROVIDER_OPTIONS = [
   { value: 'openai', label: 'OpenAI' },
@@ -22,25 +19,17 @@ const API_KEY_PLACEHOLDER = {
   '': 'Select a provider first',
 }
 
-const THEME_CYCLE = { light: 'dark', dark: 'light', system: 'light' }
-
-function ThemeIcon({ theme }) {
-  if (theme === 'light') return <Sun size={15} />
-  return <Moon size={15} />
-}
-
 function Header({
   apiKey,
   model,
   provider,
-  theme = 'system',
   byokValidationMessage,
   onApiKeyChange,
   onModelChange,
   onProviderChange,
-  onThemeChange,
   onReset,
-  userId = '',
+  isSidebarOpen = false,
+  onSidebarToggle,
 }) {
   const [activeModal, setActiveModal] = useState(null)
   const [isApiKeyVisible, setIsApiKeyVisible] = useState(false)
@@ -48,7 +37,6 @@ function Header({
   const [modelSuggestions, setModelSuggestions] = useState(MODEL_SUGGESTIONS[provider] || [])
   const [isFetchingModels, setIsFetchingModels] = useState(false)
   const [modelFetchError, setModelFetchError] = useState(null)
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const byokDropdownRef = useRef(null)
 
   const closeModal = () => setActiveModal(null)
@@ -67,21 +55,10 @@ function Header({
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
-  // Lock body scroll when mobile drawer is open
-  useEffect(() => {
-    if (isMobileMenuOpen) {
-      document.body.style.overflow = 'hidden'
-    } else {
-      document.body.style.overflow = ''
-    }
-    return () => { document.body.style.overflow = '' }
-  }, [isMobileMenuOpen])
-
   const handleReset = async () => {
     await onReset()
     closeModal()
     setOpenDropdown(null)
-    setIsMobileMenuOpen(false)
   }
 
   const handleFetchModels = async () => {
@@ -103,14 +80,9 @@ function Header({
     }
   }
 
-  const handleThemeToggle = () => {
-    if (onThemeChange) onThemeChange(THEME_CYCLE[theme] || 'system')
-  }
-
   const canFetchModels = provider === 'ollama_cloud' && apiKey.trim().length > 0
 
-  // Shared BYOK form fields — rendered in both desktop dropdown and mobile drawer.
-  // idSuffix keeps HTML ids unique when both are in the DOM simultaneously.
+  // Shared BYOK form fields rendered in both desktop dropdown and mobile drawer
   const renderByokFields = (idSuffix = '') => (
     <div className="header-controls byok-controls">
       {/* Provider */}
@@ -256,6 +228,17 @@ function Header({
   return (
     <>
       <header className="header">
+        {/* Sidebar toggle — always visible, left of title */}
+        <button
+          type="button"
+          className={`sidebar-toggle-btn ${isSidebarOpen ? 'active' : ''}`}
+          onClick={onSidebarToggle}
+          aria-label={isSidebarOpen ? 'Close chat history' : 'Open chat history'}
+          title={isSidebarOpen ? 'Close history' : 'Chat history'}
+        >
+          <Menu size={18} />
+        </button>
+
         <div className="title-wrap">
           <FileSearchCorner className="title-icon" size={28} aria-hidden="true" />
           <div className="title-text-block">
@@ -266,16 +249,6 @@ function Header({
 
         {/* Desktop controls */}
         <div className="header-main-controls">
-          <button
-            type="button"
-            className="theme-toggle-btn"
-            onClick={handleThemeToggle}
-            aria-label={`Switch theme (current: ${theme})`}
-            title={`Theme: ${theme}`}
-          >
-            <ThemeIcon theme={theme} />
-          </button>
-
           <div className="header-dropdown" ref={byokDropdownRef}>
             <button
               type="button"
@@ -298,109 +271,7 @@ function Header({
           </div>
         </div>
 
-        {/* Hamburger — mobile only */}
-        <button
-          type="button"
-          className="hamburger-btn"
-          onClick={() => setIsMobileMenuOpen(true)}
-          aria-label="Open menu"
-          aria-expanded={isMobileMenuOpen}
-        >
-          <Menu size={20} />
-        </button>
       </header>
-
-      {/* Mobile drawer */}
-      {isMobileMenuOpen && (
-        <div
-          className="mobile-drawer-overlay"
-          onClick={() => setIsMobileMenuOpen(false)}
-          aria-modal="true"
-          role="dialog"
-          aria-label="Menu"
-        >
-          <div className="mobile-drawer" onClick={(e) => e.stopPropagation()}>
-            <div className="mobile-drawer-header">
-              <span className="mobile-drawer-title">Menu</span>
-              <button
-                type="button"
-                className="mobile-drawer-close"
-                onClick={() => setIsMobileMenuOpen(false)}
-                aria-label="Close menu"
-              >
-                <X size={20} />
-              </button>
-            </div>
-
-            {/* Theme */}
-            <div className="mobile-drawer-section">
-              <div className="mobile-drawer-section-title">Appearance</div>
-              <button type="button" className="mobile-theme-row" onClick={handleThemeToggle}>
-                <ThemeIcon theme={theme} />
-                <span>{theme === 'dark' ? 'Dark mode' : 'Light mode'}</span>
-                <span className="mobile-theme-hint">tap to switch</span>
-              </button>
-            </div>
-
-            {/* API Settings */}
-            <div className="mobile-drawer-section">
-              <div className="mobile-drawer-section-title">API Settings</div>
-              {renderByokFields('-mobile')}
-            </div>
-
-            {/* Session / User ID */}
-            {userId && (
-              <div className="mobile-drawer-section">
-                <div className="mobile-drawer-section-title">Session</div>
-                <div className="mobile-drawer-user-id">
-                  <span className="mobile-drawer-meta-label">User ID</span>
-                  <span className="mobile-drawer-meta-value" title={userId}>{userId}</span>
-                </div>
-              </div>
-            )}
-
-            {/* Keyboard shortcuts */}
-            <div className="mobile-drawer-section">
-              <div className="mobile-drawer-section-title">Shortcuts</div>
-              <div className="mobile-shortcuts">
-                <div className="mobile-shortcut-row">
-                  <span className="mobile-shortcut-key">Enter</span>
-                  <span className="mobile-shortcut-desc">Send message</span>
-                </div>
-                <div className="mobile-shortcut-row">
-                  <span className="mobile-shortcut-key">Shift + Enter</span>
-                  <span className="mobile-shortcut-desc">New line</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Footer links */}
-            <div className="mobile-drawer-section mobile-drawer-links">
-              <div className="mobile-drawer-section-title">Legal</div>
-              <Link className="mobile-drawer-link" to="/privacy" onClick={() => setIsMobileMenuOpen(false)}>
-                Privacy Policy
-              </Link>
-              <Link className="mobile-drawer-link" to="/terms" onClick={() => setIsMobileMenuOpen(false)}>
-                Terms of Use
-              </Link>
-              <a
-                className="mobile-drawer-link"
-                href={PORTFOLIO_URL}
-                target="_blank"
-                rel="noreferrer noopener"
-                onClick={() => setIsMobileMenuOpen(false)}
-              >
-                Portfolio <ExternalLink size={12} aria-hidden="true" />
-              </a>
-            </div>
-
-            <div className="mobile-drawer-footer-note">
-              <span>© {new Date().getFullYear()} DocLens. All rights reserved.</span>
-              <span>AI responses may be inaccurate. Verify sources.</span>
-            </div>
-          </div>
-        </div>
-      )}
 
       <InfoModal isOpen={activeModal === 'byok'} onClose={closeModal} title="Provider &amp; API Key">
         <p>DocLens requires your own API key. Select the provider that matches your key:</p>

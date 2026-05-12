@@ -9,6 +9,7 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
+from app.config import CORTEX_BASE_URL
 from app.services.delete_service import run_delete, run_delete_all
 from app.services.document_registry import (
     list_documents,
@@ -18,6 +19,13 @@ from app.services.document_registry import (
 )
 from app.services.ingest_service import run_ingest
 from app.services.query_service import run_query
+from services.rag_client import (
+    chat as rag_chat,
+    delete_thread as rag_delete_thread,
+    get_thread as rag_get_thread,
+    list_threads as rag_list_threads,
+    patch_thread as rag_patch_thread,
+)
 
 
 router = APIRouter()
@@ -32,6 +40,20 @@ class QueryRequest(BaseModel):
     model: str = Field(min_length=1)
     provider: Literal["openai", "ollama_cloud"] = "openai"
     doc_ids: Optional[List[str]] = None
+
+
+class ChatRequest(BaseModel):
+    query: str
+    user_id: str
+    api_key: str = Field(min_length=1)
+    model: str = Field(min_length=1)
+    provider: Literal["openai", "ollama_cloud"] = "openai"
+    thread_id: Optional[str] = None
+    doc_ids: Optional[List[str]] = None
+
+
+class ThreadPatchRequest(BaseModel):
+    title: Optional[str] = None
 
 
 class DeleteRequest(BaseModel):
@@ -189,6 +211,126 @@ def query_endpoint(request: QueryRequest):
     return payload
 
 
+@router.post("/chat")
+def chat_endpoint(request: ChatRequest):
+    """Multi-turn chat with persisted thread history (handled by Cortex)."""
+    user_id = request.user_id.strip()
+    if not user_id:
+        return _error_response(400, "invalid_user", "user_id is required")
+
+    # First turn of a fresh thread: auto-scope to the user's only document.
+    # On subsequent turns Cortex uses the thread's stored doc_ids, so we only
+    # need to provide doc_ids when creating the thread.
+    explicit_doc_ids = request.doc_ids
+    if not request.thread_id and not explicit_doc_ids:
+        user_docs = list_documents(user_id)
+        if len(user_docs) == 1:
+            explicit_doc_ids = [user_docs[0]["doc_id"]]
+
+    llm = {
+        "provider": request.provider,
+        "api_key": request.api_key,
+        "model": request.model,
+    }
+
+    start = time.perf_counter()
+    try:
+        result = rag_chat(
+            query=request.query,
+            user_id=user_id,
+            thread_id=request.thread_id,
+            doc_ids=explicit_doc_ids,
+            llm=llm,
+            base_url=CORTEX_BASE_URL,
+        )
+    except requests.HTTPError as exc:
+        return _handle_upstream_error(exc, "Chat")
+    except requests.RequestException as exc:
+        return _error_response(
+            502, "upstream_error",
+            "Chat failed: could not reach Cortex.",
+            {"upstream_detail": str(exc)},
+        )
+
+    elapsed_ms = (time.perf_counter() - start) * 1000
+    payload = dict(result) if isinstance(result, dict) else {"result": result}
+    payload["meta"] = _build_meta(payload.get("meta"), elapsed_ms)
+    return payload
+
+
+@router.get("/threads")
+def list_threads_endpoint(user_id: str):
+    user_id = (user_id or "").strip()
+    if not user_id:
+        return _error_response(400, "invalid_user", "user_id is required")
+    try:
+        return rag_list_threads(user_id=user_id, app_name="doclens", base_url=CORTEX_BASE_URL)
+    except requests.HTTPError as exc:
+        return _handle_upstream_error(exc, "List threads")
+    except requests.RequestException as exc:
+        return _error_response(
+            502, "upstream_error",
+            "List threads failed: could not reach Cortex.",
+            {"upstream_detail": str(exc)},
+        )
+
+
+@router.get("/threads/{thread_id}")
+def get_thread_endpoint(thread_id: str, user_id: str):
+    user_id = (user_id or "").strip()
+    if not user_id:
+        return _error_response(400, "invalid_user", "user_id is required")
+    try:
+        return rag_get_thread(thread_id=thread_id, user_id=user_id, base_url=CORTEX_BASE_URL)
+    except requests.HTTPError as exc:
+        return _handle_upstream_error(exc, "Get thread")
+    except requests.RequestException as exc:
+        return _error_response(
+            502, "upstream_error",
+            "Get thread failed: could not reach Cortex.",
+            {"upstream_detail": str(exc)},
+        )
+
+
+@router.delete("/threads/{thread_id}")
+def delete_thread_endpoint(thread_id: str, user_id: str):
+    user_id = (user_id or "").strip()
+    if not user_id:
+        return _error_response(400, "invalid_user", "user_id is required")
+    try:
+        return rag_delete_thread(thread_id=thread_id, user_id=user_id, base_url=CORTEX_BASE_URL)
+    except requests.HTTPError as exc:
+        return _handle_upstream_error(exc, "Delete thread")
+    except requests.RequestException as exc:
+        return _error_response(
+            502, "upstream_error",
+            "Delete thread failed: could not reach Cortex.",
+            {"upstream_detail": str(exc)},
+        )
+
+
+@router.patch("/threads/{thread_id}")
+def patch_thread_endpoint(thread_id: str, user_id: str, request: ThreadPatchRequest):
+    user_id = (user_id or "").strip()
+    if not user_id:
+        return _error_response(400, "invalid_user", "user_id is required")
+    try:
+        return rag_patch_thread(
+            thread_id=thread_id,
+            user_id=user_id,
+            title=request.title,
+            base_url=CORTEX_BASE_URL,
+        )
+    except requests.HTTPError as exc:
+        return _handle_upstream_error(exc, "Update thread")
+    except requests.RequestException as exc:
+        return _error_response(
+            502, "upstream_error",
+            "Update thread failed: could not reach Cortex.",
+            {"upstream_detail": str(exc)},
+        )
+
+
 @router.post("/ingest")
 async def ingest_endpoint(
     file: UploadFile = File(...),
@@ -238,14 +380,19 @@ def delete_endpoint(request: DeleteRequest):
     start = time.perf_counter()
     try:
         result = run_delete(user_id=request.user_id, doc_id=request.doc_id, app_name="doclens")
-        remove_document(user_id=request.user_id, doc_id=request.doc_id)
-        elapsed_ms = (time.perf_counter() - start) * 1000
-        return {"status": "success", "result": result, "meta": _build_meta({}, elapsed_ms)}
     except requests.HTTPError as exc:
+        # Document no longer exists in the vector store — clean up registry anyway
+        if exc.response is not None and exc.response.status_code == 404:
+            remove_document(user_id=request.user_id, doc_id=request.doc_id)
+            elapsed_ms = (time.perf_counter() - start) * 1000
+            return {"status": "success", "result": {"deleted_points": 0}, "meta": _build_meta({}, elapsed_ms)}
         return _handle_upstream_error(exc, "Delete")
     except requests.RequestException as exc:
         return _error_response(502, "upstream_error", "Delete failed: could not reach Cortex.",
                                {"upstream_detail": str(exc)})
+    remove_document(user_id=request.user_id, doc_id=request.doc_id)
+    elapsed_ms = (time.perf_counter() - start) * 1000
+    return {"status": "success", "result": result, "meta": _build_meta({}, elapsed_ms)}
 
 
 @router.post("/delete_all")

@@ -1,0 +1,341 @@
+/* ── Backdrop (mobile overlay only) ──────────────────────────────── */
+.sidebar-backdrop {
+  display: none;
+}
+
+/* ── Sidebar outer (collapsing shell) ────────────────────────────── */
+.thread-sidebar {
+  flex-shrink: 0;
+  width: 280px;
+  overflow: hidden;
+  transition: width 250ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.thread-sidebar.closed {
+  width: 0;
+}
+
+/* ── Inner panel (fixed 280px; clipped by the outer shell) ───────── */
+.thread-sidebar-inner {
+  width: 280px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--border);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+/* ── Header ──────────────────────────────────────────────────────── */
+.thread-sidebar-header {
+  padding: 14px 14px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.thread-sidebar-title {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text);
+  letter-spacing: 0.02em;
+}
+
+.thread-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.thread-new-button {
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  color: var(--text);
+  cursor: pointer;
+  transition: background 120ms ease;
+}
+
+.thread-new-button:hover {
+  background: var(--accent-dim);
+  color: var(--accent-text);
+  border-color: var(--accent);
+}
+
+/* Close button — hidden on desktop, shown on mobile */
+.sidebar-close-btn {
+  display: none;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text3);
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+  flex-shrink: 0;
+}
+.sidebar-close-btn:hover { color: var(--text); background: var(--surface2); }
+
+/* ── Thread list ─────────────────────────────────────────────────── */
+.thread-list {
+  flex: 1;
+  list-style: none;
+  margin: 0;
+  padding: 6px 8px;
+  overflow-y: auto;
+}
+
+.thread-empty {
+  padding: 16px;
+  color: var(--text3);
+  font-size: 13px;
+  text-align: center;
+}
+
+.thread-item {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  border-radius: var(--radius-sm);
+  margin-bottom: 2px;
+}
+
+.thread-item:hover {
+  background: var(--surface2);
+}
+
+.thread-item.active {
+  background: var(--accent-dim);
+}
+
+.thread-select {
+  flex: 1;
+  text-align: left;
+  background: transparent;
+  border: none;
+  padding: 8px 30px 8px 10px;
+  cursor: pointer;
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border-radius: var(--radius-sm);
+}
+
+.thread-item-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.thread-item.active .thread-item-title {
+  color: var(--accent-text);
+}
+
+.thread-item-meta {
+  font-size: 11px;
+  color: var(--text3);
+}
+
+.thread-delete {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 22px;
+  height: 22px;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: transparent;
+  color: var(--text2);
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.thread-delete:hover {
+  background: var(--red);
+  color: white;
+}
+
+/* ── API Settings section — mobile only ──────────────────────────── */
+.sidebar-api-settings {
+  display: none;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+/* Override compact widths inside the sidebar panel */
+.sidebar-api-settings .compact-input,
+.sidebar-api-settings .compact-input-key {
+  width: 100%;
+  min-width: 0;
+}
+
+.sidebar-section-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text3);
+}
+
+/* ── Footer ──────────────────────────────────────────────────────── */
+.sidebar-footer {
+  border-top: 1px solid var(--border);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.sidebar-footer-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.sidebar-footer-label {
+  font-size: 12px;
+  color: var(--text3);
+}
+
+.sidebar-session-id {
+  font-size: 11px;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  color: var(--text2);
+  background: var(--surface2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  letter-spacing: 0.04em;
+}
+
+/* ── Theme switch ────────────────────────────────────────────────── */
+.theme-switch {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  width: 34px;
+  height: 18px;
+  border-radius: 9px;
+  border: none;
+  cursor: pointer;
+  padding: 0 2px;
+  background: var(--surface2);
+  transition: background 200ms ease;
+  flex-shrink: 0;
+}
+
+.theme-switch.on {
+  background: var(--accent);
+}
+
+.theme-switch-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: white;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+  transition: transform 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  display: block;
+  flex-shrink: 0;
+}
+
+.theme-switch.on .theme-switch-thumb {
+  transform: translateX(16px);
+}
+
+/* ── Sidebar links ───────────────────────────────────────────────── */
+.sidebar-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+}
+
+.sidebar-link {
+  font-size: 11px;
+  color: var(--text3);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  transition: color 120ms ease;
+}
+
+.sidebar-link:hover {
+  color: var(--accent-text);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   Mobile — sidebar becomes a fixed overlay
+   ═══════════════════════════════════════════════════════════════════ */
+
+@media (max-width: 768px) {
+  .sidebar-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+    backdrop-filter: blur(2px);
+    z-index: 59;
+  }
+
+  .thread-sidebar {
+    position: fixed;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: min(320px, 90vw) !important;
+    overflow: visible;
+    z-index: 60;
+    transform: translateX(-100%);
+    transition: transform 250ms cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .thread-sidebar.open {
+    transform: translateX(0);
+  }
+
+  .thread-sidebar.closed {
+    transform: translateX(-100%);
+  }
+
+  .thread-sidebar-inner {
+    width: 100%;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+
+  /* Thread list: don't flex-grow, let the whole inner scroll */
+  .thread-list {
+    flex: 0 0 auto;
+    overflow-y: visible;
+    min-height: 60px;
+  }
+
+  /* Show API settings section */
+  .sidebar-api-settings {
+    display: flex;
+  }
+
+  /* Show close button */
+  .sidebar-close-btn {
+    display: flex;
+  }
+}
