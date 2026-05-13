@@ -132,23 +132,23 @@ function makeCitationLinkComponent(sources, openCitation) {
 }
 
 // Typing animation for the embedded answer inside a timeline thread
-function AnswerBlock({ answer, sources, retrieveMs, generateMs }) {
+function AnswerBlock({ answer, sources, retrieveMs, generateMs, streaming = false }) {
   const [typed, setTyped] = useState('')
   const [activeCitation, setActiveCitation] = useState(null)
 
   useEffect(() => {
-    if (!answer) return
+    if (!answer || streaming) return
     let i = 0
-    setTyped('')
     const iv = setInterval(() => {
       i = Math.min(i + TYPING_STEP, answer.length)
       setTyped(answer.slice(0, i))
       if (i >= answer.length) clearInterval(iv)
     }, TYPING_INTERVAL)
     return () => clearInterval(iv)
-  }, [answer])
+  }, [answer, streaming])
 
-  const isTyping = typed.length < (answer?.length || 0)
+  const displayedAnswer = streaming ? answer : typed
+  const isTyping = !streaming && typed.length < (answer?.length || 0)
   const totalSecs = retrieveMs != null || generateMs != null
     ? (((retrieveMs || 0) + (generateMs || 0)) / 1000).toFixed(1)
     : null
@@ -160,7 +160,7 @@ function AnswerBlock({ answer, sources, retrieveMs, generateMs }) {
 
   return (
     <div className="tl-answer-body">
-      <ReactMarkdown components={{ a: citLink }}>{preprocess(typed)}</ReactMarkdown>
+      <ReactMarkdown components={{ a: citLink }}>{preprocess(displayedAnswer)}</ReactMarkdown>
       {isTyping && <span className="typing-cursor" aria-hidden="true" />}
       {activeCitation && (
         <CitationDrawer citation={activeCitation} onClose={() => setActiveCitation(null)} />
@@ -258,6 +258,7 @@ function TimelineMessage({ message }) {
               sources={result.sources}
               retrieveMs={result.retrieve_ms}
               generateMs={result.generate_ms}
+              streaming={Boolean(result.streaming)}
             />
           </div>
         </div>
@@ -367,8 +368,11 @@ function MessageBubble({ message, onDocSelect }) {
       transition={{ duration: 0.18, ease: 'easeOut' }}
     >
       {!isUser && (
-        <div className="msg-avatar msg-avatar-assistant" aria-hidden="true">
-          <Bot size={14} />
+        <div className="msg-avatar-wrap" aria-hidden="true">
+          <div className="msg-avatar msg-avatar-assistant">
+            <Bot size={14} />
+          </div>
+          <span className="msg-avatar-label">Lume</span>
         </div>
       )}
 
@@ -387,8 +391,11 @@ function MessageBubble({ message, onDocSelect }) {
       </div>
 
       {isUser && (
-        <div className="msg-avatar msg-avatar-user" aria-hidden="true">
-          <UserRound size={14} />
+        <div className="msg-avatar-wrap" aria-hidden="true">
+          <div className="msg-avatar msg-avatar-user">
+            <UserRound size={14} />
+          </div>
+          <span className="msg-avatar-label">You</span>
         </div>
       )}
     </motion.div>

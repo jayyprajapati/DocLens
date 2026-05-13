@@ -12,16 +12,18 @@ def query(
     query,
     user_id,
     app_name="doclens",
+    doc_id=None,
     doc_ids=None,
     base_url=None,
     timeout=120,
     llm=None,
+    llm_config=None,
 ):
     """
     llm: {"provider": "openai", "api_key": "...", "model": "gpt-4o-mini"}
     doc_ids: optional list of doc_id strings to scope retrieval
     """
-    endpoint = (base_url or DEFAULT_RAG_API_BASE_URL).rstrip("/") + "/query"
+    endpoint = (base_url or DEFAULT_RAG_API_BASE_URL).rstrip("/") + "/chat"
 
     payload = {
         "query": query,
@@ -29,13 +31,19 @@ def query(
         "app_name": app_name,
     }
 
+    if doc_id and not doc_ids:
+        doc_ids = [doc_id]
+
     if doc_ids:
         payload["doc_ids"] = [str(d) for d in doc_ids if str(d).strip()]
+
+    if llm_config and not llm:
+        llm = llm_config
 
     if llm:
         payload["llm"] = llm
 
-    response = requests.post(endpoint, json=payload, timeout=timeout)
+    response = requests.post(endpoint, params={"stream": "false"}, json=payload, timeout=timeout)
     response.raise_for_status()
     return response.json()
 
@@ -66,7 +74,73 @@ def chat(
     if llm:
         payload["llm"] = llm
 
-    response = requests.post(endpoint, json=payload, timeout=timeout)
+    response = requests.post(endpoint, params={"stream": "false"}, json=payload, timeout=timeout)
+    response.raise_for_status()
+    return response.json()
+
+
+def stream_chat(
+    query,
+    user_id,
+    thread_id=None,
+    app_name="doclens",
+    doc_ids=None,
+    base_url=None,
+    timeout=120,
+    llm=None,
+):
+    """Open a Cortex /chat SSE stream. Caller owns closing the response."""
+    endpoint = (base_url or DEFAULT_RAG_API_BASE_URL).rstrip("/") + "/chat"
+
+    payload = {
+        "query": query,
+        "user_id": user_id,
+        "app_name": app_name,
+    }
+
+    if thread_id:
+        payload["thread_id"] = thread_id
+    if doc_ids:
+        payload["doc_ids"] = [str(d) for d in doc_ids if str(d).strip()]
+    if llm:
+        payload["llm"] = llm
+
+    response = requests.post(
+        endpoint,
+        params={"stream": "true"},
+        json=payload,
+        timeout=timeout,
+        stream=True,
+        headers={"Accept": "text/event-stream"},
+    )
+    response.raise_for_status()
+    return response
+
+
+def generate(
+    query,
+    user_id,
+    app_name="doclens",
+    base_url=None,
+    timeout=120,
+    llm=None,
+    context=None,
+    task=None,
+):
+    endpoint = (base_url or DEFAULT_RAG_API_BASE_URL).rstrip("/") + "/generate"
+    payload = {
+        "query": query,
+        "user_id": user_id,
+        "app_name": app_name,
+    }
+    if context is not None:
+        payload["context"] = context
+    if task:
+        payload["task"] = task
+    if llm:
+        payload["llm"] = llm
+
+    response = requests.post(endpoint, params={"stream": "false"}, json=payload, timeout=timeout)
     response.raise_for_status()
     return response.json()
 

@@ -46,7 +46,9 @@ DocLens forwards requests to Cortex over HTTP using the `requests` library.
 Current upstream mappings:
 
 - DocLens `POST /ingest` -> Cortex `POST /ingest`
-- DocLens `POST /query` -> Cortex `POST /query`
+- DocLens `POST /query` -> Cortex `POST /chat?stream=false`
+- DocLens `POST /chat` -> Cortex `POST /chat?stream=false`
+- DocLens `POST /chat/stream` -> Cortex `POST /chat?stream=true` SSE
 - DocLens `POST /delete` -> Cortex `POST /delete`
 - DocLens `POST /delete_all` -> Cortex `POST /delete_all`
 
@@ -70,7 +72,7 @@ Query flow:
 
 1. Frontend sends query, `user_id`, and optional BYOK fields.
 2. DocLens enforces query quota and builds upstream payload.
-3. DocLens calls Cortex `/query`.
+3. DocLens calls Cortex `/chat` with `stream=false` for JSON responses, or proxies Cortex SSE through `/chat/stream`.
 4. Cortex retrieves relevant chunks and generates an answer.
 5. DocLens returns answer, sources, timing metadata, and usage state.
 

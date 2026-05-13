@@ -7,7 +7,6 @@ import InfoModal from './components/InfoModal'
 import AppFooter from './components/AppFooter'
 import ThreadSidebar from './components/ThreadSidebar'
 import {
-  chat as chatApi,
   deleteAllDocuments,
   deleteDocument,
   deleteThread,
@@ -15,8 +14,8 @@ import {
   getThread,
   ingest,
   listThreads,
-  query as queryApi,
   renameThread,
+  streamChat,
 } from './services/api'
 import './App.css'
 
@@ -98,7 +97,9 @@ function parseErrorMessage(raw) {
   if (!raw) return 'Something went wrong.'
   const s = String(raw).trim()
   if (s.startsWith('{')) {
-    try { const p = JSON.parse(s); if (p?.detail) return p.detail } catch {}
+    try { const p = JSON.parse(s); if (p?.detail) return p.detail } catch {
+      // Fall through to the raw string when the upstream detail is not JSON.
+    }
   }
   return s
 }
@@ -106,7 +107,9 @@ function parseErrorMessage(raw) {
 function extractBestError(error) {
   const upstream = error?.payload?.upstream_detail
   if (upstream) {
-    try { const p = JSON.parse(upstream); if (p?.detail) return p.detail } catch {}
+    try { const p = JSON.parse(upstream); if (p?.detail) return p.detail } catch {
+      // Fall through to the raw upstream detail.
+    }
     if (typeof upstream === 'string' && upstream.trim()) return upstream.trim()
   }
   return parseErrorMessage(error?.message)
@@ -136,6 +139,7 @@ export default function App() {
   const [threadPendingDeletion, setThreadPendingDeletion] = useState(null)
 
   const stageTimerRef = useRef(null)
+  const threadCacheRef = useRef({})
 
   const byokValidationMessage = getByokValidationMessage(apiKey, selectedModel, provider)
   const isByokReady = !byokValidationMessage
@@ -208,6 +212,13 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Keep thread cache in sync so timeline timing survives thread switches
+  useEffect(() => {
+    if (activeThreadId && chat.length > 0) {
+      threadCacheRef.current[activeThreadId] = chat
+    }
+  }, [chat, activeThreadId])
+
   // ─── message helpers ────────────────────────────────────────────
   const addMessage = (msg) => setChat((prev) => [...prev, msg])
   const updateMessage = (id, fn) => setChat((prev) => prev.map((m) => m.id === id ? fn(m) : m))
@@ -262,22 +273,6 @@ export default function App() {
     }))
   }
 
-  // ─── auto-rename new threads ────────────────────────────────────
-  async function autoNameThread(threadId, userMessage, docIds) {
-    const prompt = `In 4-6 words, what is this conversation about? Reply with only the title, no quotes or punctuation. The user asked: "${userMessage.slice(0, 200)}"`
-    try {
-      const result = await queryApi(prompt, userId, apiKey, selectedModel, provider, docIds?.length ? docIds : null)
-      const raw = (result?.answer || '').trim()
-      const title = raw.split('\n')[0].replace(/^["']|["'.!?,]$/g, '').trim().slice(0, 60)
-      if (title.length >= 3) {
-        await renameThread(threadId, userId, title)
-        refreshThreads()
-      }
-    } catch {
-      // silent — thread keeps default title
-    }
-  }
-
   // ─── handlers ───────────────────────────────────────────────────
   async function runChatTurn(text, { docIds } = {}) {
     const timelineId = uuidv4()
@@ -295,7 +290,8 @@ export default function App() {
     startStageProgress(timelineId, QUERY_STAGES, QUERY_PACE)
 
     try {
-      const result = await chatApi({
+      const wasNewThread = !activeThreadId
+      const result = await streamChat({
         query: text,
         userId,
         apiKey,
@@ -303,17 +299,26 @@ export default function App() {
         provider,
         threadId: activeThreadId,
         docIds,
+        onEvent: (_event, partial) => {
+          if (!partial?.answer) return
+          updateMessage(timelineId, (m) => ({
+            ...m,
+            result: {
+              ...(m.result || {}),
+              answer: partial.answer,
+              sources: partial.citations,
+              grounded: partial.grounded,
+              retrieve_ms: partial.meta?.retrieve_ms ?? m.result?.retrieve_ms ?? null,
+              generate_ms: partial.meta?.generate_ms ?? m.result?.generate_ms ?? null,
+              streaming: true,
+            },
+          }))
+        },
       })
 
       // Pick up new thread id if Cortex just created one
-      const isNewThread = !activeThreadId && result?.thread_id
       if (result?.thread_id && result.thread_id !== activeThreadId) {
         setActiveThreadId(result.thread_id)
-      }
-
-      // Auto-name the thread in the background after the first exchange
-      if (isNewThread) {
-        autoNameThread(result.thread_id, text, docIds)
       }
 
       const meta = result?.meta || {}
@@ -329,8 +334,17 @@ export default function App() {
           ? result.citations
           : (Array.isArray(result?.sources) ? result.sources : []),
         grounded: result?.grounded ?? null,
+        streaming: false,
       })
 
+      if (wasNewThread && result?.thread_id) {
+        const title = text.trim().split(/\s+/).slice(0, 8).join(' ').slice(0, 60)
+        if (title.length >= 3) {
+          renameThread(result.thread_id, userId, title).then(refreshThreads).catch(() => refreshThreads())
+        } else {
+          refreshThreads()
+        }
+      }
       refreshThreads()
     } catch (error) {
       failStages(timelineId, extractBestError(error))
@@ -376,6 +390,12 @@ export default function App() {
 
   const handleSelectThread = async (threadId) => {
     if (threadId === activeThreadId) return
+    // Restore from in-memory cache to preserve timeline timing data
+    if (threadCacheRef.current[threadId]) {
+      setChat(threadCacheRef.current[threadId])
+      setActiveThreadId(threadId)
+      return
+    }
     try {
       const data = await getThread(threadId, userId)
       const loaded = (data?.messages || []).map((m) => ({
@@ -455,7 +475,9 @@ export default function App() {
 
   const handleReset = async () => {
     clearTimeout(stageTimerRef.current)
-    try { await deleteAllDocuments(userId, apiKey) } catch {}
+    try { await deleteAllDocuments(userId, apiKey) } catch {
+      // Reset should still clear the local session if upstream cleanup is unavailable.
+    }
     localStorage.clear()
     window.location.reload()
   }

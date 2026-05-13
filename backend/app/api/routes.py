@@ -1,3 +1,4 @@
+import json
 import os
 import tempfile
 import time
@@ -6,7 +7,7 @@ import requests
 from typing import List, Literal, Optional
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 from app.config import CORTEX_BASE_URL
@@ -25,6 +26,7 @@ from services.rag_client import (
     get_thread as rag_get_thread,
     list_threads as rag_list_threads,
     patch_thread as rag_patch_thread,
+    stream_chat as rag_stream_chat,
 )
 
 
@@ -137,6 +139,18 @@ def _handle_upstream_error(exc, action):
         f"{action} failed: upstream service error.",
         {"upstream_detail": _upstream_detail(exc)},
     )
+
+
+def _sse_event(event_type, data):
+    return f"event: {event_type}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+
+def _latest_thread_id(user_id):
+    data = rag_list_threads(user_id=user_id, app_name="doclens", base_url=CORTEX_BASE_URL, timeout=10)
+    threads = data.get("threads", []) if isinstance(data, dict) else []
+    if not threads:
+        return None
+    return threads[0].get("id")
 
 
 @router.get("/documents")
@@ -256,6 +270,71 @@ def chat_endpoint(request: ChatRequest):
     payload = dict(result) if isinstance(result, dict) else {"result": result}
     payload["meta"] = _build_meta(payload.get("meta"), elapsed_ms)
     return payload
+
+
+@router.post("/chat/stream")
+def chat_stream_endpoint(request: ChatRequest):
+    """Proxy Cortex /chat SSE and append DocLens thread metadata at the end."""
+    user_id = request.user_id.strip()
+    if not user_id:
+        return _error_response(400, "invalid_user", "user_id is required")
+
+    explicit_doc_ids = request.doc_ids
+    if not request.thread_id and not explicit_doc_ids:
+        user_docs = list_documents(user_id)
+        if len(user_docs) == 1:
+            explicit_doc_ids = [user_docs[0]["doc_id"]]
+
+    llm = {
+        "provider": request.provider,
+        "api_key": request.api_key,
+        "model": request.model,
+    }
+
+    try:
+        upstream = rag_stream_chat(
+            query=request.query,
+            user_id=user_id,
+            thread_id=request.thread_id,
+            doc_ids=explicit_doc_ids,
+            llm=llm,
+            base_url=CORTEX_BASE_URL,
+        )
+    except requests.HTTPError as exc:
+        return _handle_upstream_error(exc, "Chat")
+    except requests.RequestException as exc:
+        return _error_response(
+            502, "upstream_error",
+            "Chat failed: could not reach Cortex.",
+            {"upstream_detail": str(exc)},
+        )
+
+    def _proxy():
+        try:
+            for chunk in upstream.iter_content(chunk_size=1024):
+                if chunk:
+                    yield chunk
+        finally:
+            upstream.close()
+
+        thread_id = request.thread_id
+        if not thread_id:
+            try:
+                thread_id = _latest_thread_id(user_id)
+            except requests.RequestException:
+                thread_id = None
+
+        if thread_id:
+            yield _sse_event("thread", {"thread_id": thread_id}).encode("utf-8")
+
+    return StreamingResponse(
+        _proxy(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @router.get("/threads")
