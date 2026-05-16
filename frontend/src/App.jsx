@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
+import { getUserId } from './services/auth'
 import Header from './components/Header'
 import ChatWindow from './components/ChatWindow'
 import InputBar from './components/InputBar'
@@ -85,14 +86,6 @@ function getDocIdFromIngestResponse(payload) {
   return candidates.find((c) => typeof c === 'string' && c.trim()) || null
 }
 
-function getOrCreateUserId() {
-  const existing = localStorage.getItem(STORAGE_KEYS.userId)
-  if (existing) return existing
-  const id = uuidv4()
-  localStorage.setItem(STORAGE_KEYS.userId, id)
-  return id
-}
-
 function parseErrorMessage(raw) {
   if (!raw) return 'Something went wrong.'
   const s = String(raw).trim()
@@ -116,7 +109,7 @@ function extractBestError(error) {
 }
 
 export default function App() {
-  const [userId]   = useState(() => getOrCreateUserId())
+  const [userId]   = useState(() => getUserId())
   const [apiKey, setApiKey]           = useState(() => localStorage.getItem(STORAGE_KEYS.apiKey) || '')
   const [selectedModel, setSelectedModel] = useState(() => localStorage.getItem(STORAGE_KEYS.selectedModel) || '')
   const [provider, setProvider]       = useState(() => localStorage.getItem(STORAGE_KEYS.provider) || '')
@@ -165,7 +158,7 @@ export default function App() {
 
   // Load persisted documents on mount
   useEffect(() => {
-    getDocuments(userId).then((data) => {
+    getDocuments().then((data) => {
       const docs = (data?.documents || []).map((d) => ({
         id: uuidv4(),
         doc_id: d.doc_id,
@@ -180,7 +173,7 @@ export default function App() {
   // Load threads list on mount
   const refreshThreads = async () => {
     try {
-      const data = await listThreads(userId)
+      const data = await listThreads()
       setThreads(Array.isArray(data?.threads) ? data.threads : [])
     } catch {
       setThreads([])
@@ -193,7 +186,7 @@ export default function App() {
   useEffect(() => {
     if (!activeThreadId) return
     let cancelled = false
-    getThread(activeThreadId, userId).then((data) => {
+    getThread(activeThreadId).then((data) => {
       if (cancelled || !data) return
       const loaded = (data.messages || []).map((m) => ({
         id: `msg-${m.id}`,
@@ -293,7 +286,6 @@ export default function App() {
       const wasNewThread = !activeThreadId
       const result = await streamChat({
         query: text,
-        userId,
         apiKey,
         model: selectedModel,
         provider,
@@ -340,7 +332,7 @@ export default function App() {
       if (wasNewThread && result?.thread_id) {
         const title = text.trim().split(/\s+/).slice(0, 8).join(' ').slice(0, 60)
         if (title.length >= 3) {
-          renameThread(result.thread_id, userId, title).then(refreshThreads).catch(() => refreshThreads())
+          renameThread(result.thread_id, title).then(refreshThreads).catch(() => refreshThreads())
         } else {
           refreshThreads()
         }
@@ -397,7 +389,7 @@ export default function App() {
       return
     }
     try {
-      const data = await getThread(threadId, userId)
+      const data = await getThread(threadId)
       const loaded = (data?.messages || []).map((m) => ({
         id: `msg-${m.id}`,
         role: m.role,
@@ -421,7 +413,7 @@ export default function App() {
     const tid = threadPendingDeletion
     setThreadPendingDeletion(null)
     try {
-      await deleteThread(tid, userId)
+      await deleteThread(tid)
       if (tid === activeThreadId) {
         setActiveThreadId(null)
         setChat([])
@@ -455,7 +447,7 @@ export default function App() {
     startStageProgress(timelineId, UPLOAD_STAGES, UPLOAD_PACE)
 
     try {
-      const ingestResult = await ingest(file, userId, apiKey)
+      const ingestResult = await ingest(file, apiKey)
       const docId = getDocIdFromIngestResponse(ingestResult)
       if (!docId) throw new Error('Upload response missing document identifier.')
 
@@ -475,7 +467,7 @@ export default function App() {
 
   const handleReset = async () => {
     clearTimeout(stageTimerRef.current)
-    try { await deleteAllDocuments(userId, apiKey) } catch {
+    try { await deleteAllDocuments(apiKey) } catch {
       // Reset should still clear the local session if upstream cleanup is unavailable.
     }
     localStorage.clear()
@@ -494,7 +486,7 @@ export default function App() {
     }
     setIsDeletingDocument(true)
     try {
-      await deleteDocument(userId, documentPendingDeletion.doc_id, apiKey)
+      await deleteDocument(documentPendingDeletion.doc_id, apiKey)
       setDocuments((prev) => prev.filter((d) => d.id !== documentPendingDeletion.id))
       addMessage({ id: uuidv4(), role: 'system', tone: 'success', content: `Removed: ${documentPendingDeletion.name}` })
     } catch {
