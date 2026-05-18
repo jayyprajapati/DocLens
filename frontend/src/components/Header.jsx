@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Bot, ChevronDown, Eye, EyeOff, FileSearchCorner, Info, KeyRound, Monitor, Moon, RefreshCw, Sun } from 'lucide-react'
+import { Bot, ChevronDown, Eye, EyeOff, FileSearchCorner, Info, KeyRound, Menu, RefreshCw } from 'lucide-react'
 import InfoModal from './InfoModal'
 import { fetchModels } from '../services/api'
 
@@ -8,7 +8,6 @@ const PROVIDER_OPTIONS = [
   { value: 'ollama_cloud', label: 'Ollama Cloud' },
 ]
 
-// Static suggestions shown before fetching / as fallback on error.
 const MODEL_SUGGESTIONS = {
   openai: ['gpt-4o-mini', 'gpt-4o', 'gpt-4.1-mini', 'gpt-4.1', 'o4-mini'],
   ollama_cloud: ['gpt-oss:120b'],
@@ -20,25 +19,17 @@ const API_KEY_PLACEHOLDER = {
   '': 'Select a provider first',
 }
 
-const THEME_CYCLE = { light: 'dark', dark: 'light', system: 'light' }
-
-function ThemeIcon({ theme }) {
-  if (theme === 'light')  return <Sun size={15} />
-  if (theme === 'dark')   return <Moon size={15} />
-  return <Moon size={15} />
-}
-
 function Header({
   apiKey,
   model,
   provider,
-  theme = 'system',
   byokValidationMessage,
   onApiKeyChange,
   onModelChange,
   onProviderChange,
-  onThemeChange,
   onReset,
+  isSidebarOpen = false,
+  onSidebarToggle,
 }) {
   const [activeModal, setActiveModal] = useState(null)
   const [isApiKeyVisible, setIsApiKeyVisible] = useState(false)
@@ -50,7 +41,6 @@ function Header({
 
   const closeModal = () => setActiveModal(null)
 
-  // Reset suggestions when provider changes.
   useEffect(() => {
     setModelSuggestions(MODEL_SUGGESTIONS[provider] || [])
     setModelFetchError(null)
@@ -90,35 +80,175 @@ function Header({
     }
   }
 
-  const handleThemeToggle = () => {
-    if (onThemeChange) onThemeChange(THEME_CYCLE[theme] || 'system')
-  }
-
   const canFetchModels = provider === 'ollama_cloud' && apiKey.trim().length > 0
+
+  // Shared BYOK form fields rendered in both desktop dropdown and mobile drawer
+  const renderByokFields = (idSuffix = '') => (
+    <div className="header-controls byok-controls">
+      {/* Provider */}
+      <div className="panel-field-group">
+        <div className="panel-label-row">
+          <label htmlFor={`provider-select${idSuffix}`} className="field-label field-label-stack">Provider</label>
+          <button
+            type="button"
+            className="icon-button icon-info"
+            onClick={() => setActiveModal('byok')}
+            aria-label="About providers"
+          >
+            <Info size={18} />
+          </button>
+        </div>
+        <div className="control-row control-row-compact">
+          <Bot size={16} aria-hidden="true" className="control-leading-icon" />
+          <select
+            id={`provider-select${idSuffix}`}
+            className="input input-model compact-input"
+            aria-label="Provider"
+            value={provider}
+            onChange={(e) => {
+              onProviderChange(e.target.value)
+              onModelChange('')
+            }}
+          >
+            <option value="">Select provider</option>
+            {PROVIDER_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* API Key */}
+      <div className="panel-field-group">
+        <div className="panel-label-row">
+          <label htmlFor={`api-key-input${idSuffix}`} className="field-label field-label-stack">API Key</label>
+          <button
+            type="button"
+            className="icon-button icon-info"
+            onClick={() => setActiveModal('byok')}
+            aria-label="About API keys"
+          >
+            <Info size={18} />
+          </button>
+        </div>
+        <div className="control-row control-row-compact">
+          <KeyRound size={16} aria-hidden="true" className="control-leading-icon" />
+          <input
+            id={`api-key-input${idSuffix}`}
+            className="input compact-input compact-input-key"
+            type={isApiKeyVisible ? 'text' : 'password'}
+            value={apiKey}
+            placeholder={API_KEY_PLACEHOLDER[provider] ?? 'Enter your API key'}
+            aria-label="API key"
+            onChange={(e) => onApiKeyChange(e.target.value)}
+          />
+          <button
+            type="button"
+            className="eye-toggle-btn"
+            onClick={() => setIsApiKeyVisible((v) => !v)}
+            aria-label={isApiKeyVisible ? 'Hide key' : 'Show key'}
+          >
+            {isApiKeyVisible ? <EyeOff size={14} /> : <Eye size={14} />}
+          </button>
+        </div>
+      </div>
+
+      {/* Model */}
+      <div className="panel-field-group">
+        <div className="panel-label-row">
+          <label htmlFor={`model-input${idSuffix}`} className="field-label field-label-stack">Model</label>
+          <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+            {canFetchModels && (
+              <button
+                type="button"
+                className="icon-button icon-info"
+                onClick={handleFetchModels}
+                disabled={isFetchingModels}
+                aria-label="Fetch available models from Ollama Cloud"
+                title="Fetch available models"
+              >
+                <RefreshCw size={16} className={isFetchingModels ? 'spin' : ''} />
+              </button>
+            )}
+            <button
+              type="button"
+              className="icon-button icon-info"
+              onClick={() => setActiveModal('model')}
+              aria-label="Model information"
+            >
+              <Info size={18} />
+            </button>
+          </div>
+        </div>
+        <div className="control-row control-row-compact">
+          <Bot size={16} aria-hidden="true" className="control-leading-icon" />
+          <input
+            id={`model-input${idSuffix}`}
+            list={`model-datalist${idSuffix}`}
+            className="input input-model compact-input"
+            value={model}
+            placeholder={provider ? 'Type or select a model...' : 'Select a provider first'}
+            disabled={!provider}
+            autoComplete="off"
+            onChange={(e) => onModelChange(e.target.value)}
+          />
+          <datalist id={`model-datalist${idSuffix}`}>
+            {modelSuggestions.map((m) => (
+              <option key={m} value={m} />
+            ))}
+          </datalist>
+        </div>
+        {modelFetchError && (
+          <p className="byok-inline-error" role="alert" style={{ marginTop: '4px' }}>
+            {modelFetchError}
+          </p>
+        )}
+        {canFetchModels && !modelFetchError && (
+          <p className="byok-inline-error" style={{ color: 'var(--text3)', marginTop: '4px' }}>
+            {isFetchingModels
+              ? 'Fetching available models...'
+              : 'Click the refresh icon to load your available Ollama Cloud models.'}
+          </p>
+        )}
+      </div>
+
+      {byokValidationMessage && (
+        <p className="byok-inline-error" role="alert">
+          {byokValidationMessage}
+        </p>
+      )}
+
+      <div className="reset-divider" aria-hidden="true" />
+      <button type="button" className="button button-reset" onClick={() => setActiveModal('reset')}>
+        Reset session
+      </button>
+    </div>
+  )
 
   return (
     <>
       <header className="header">
+        {/* Sidebar toggle — always visible, left of title */}
+        <button
+          type="button"
+          className={`sidebar-toggle-btn ${isSidebarOpen ? 'active' : ''}`}
+          onClick={onSidebarToggle}
+          aria-label={isSidebarOpen ? 'Close chat history' : 'Open chat history'}
+          title={isSidebarOpen ? 'Close history' : 'Chat history'}
+        >
+          <Menu size={18} />
+        </button>
+
         <div className="title-wrap">
           <FileSearchCorner className="title-icon" size={28} aria-hidden="true" />
           <div className="title-text-block">
             <h1 className="title">DocLens</h1>
-            <p className="title-subtitle">Upload a document and chat with answers grounded in its content.</p>
+            <p className="title-subtitle">A cited chat workspace for serious documents.</p>
           </div>
         </div>
 
+        {/* Desktop controls */}
         <div className="header-main-controls">
-          {/* Theme toggle */}
-          <button
-            type="button"
-            className="theme-toggle-btn"
-            onClick={handleThemeToggle}
-            aria-label={`Switch theme (current: ${theme})`}
-            title={`Theme: ${theme}`}
-          >
-            <ThemeIcon theme={theme} />
-          </button>
-
           <div className="header-dropdown" ref={byokDropdownRef}>
             <button
               type="button"
@@ -127,159 +257,20 @@ function Header({
               aria-expanded={openDropdown === 'byok'}
               aria-controls="byok-dropdown-panel"
             >
-              API Settings
+              Settings
               <ChevronDown size={16} aria-hidden="true" />
             </button>
 
             {openDropdown === 'byok' && (
               <div className="header-dropdown-panel byok-dropdown-panel" id="byok-dropdown-panel">
                 <div className="byok-section" aria-label="API settings">
-                  <div className="header-controls byok-controls">
-
-                    {/* Provider */}
-                    <div className="panel-field-group">
-                      <div className="panel-label-row">
-                        <label htmlFor="provider-select" className="field-label field-label-stack">Provider</label>
-                        <button
-                          type="button"
-                          className="icon-button icon-info"
-                          onClick={() => setActiveModal('byok')}
-                          aria-label="About providers"
-                        >
-                          <Info size={18} />
-                        </button>
-                      </div>
-                      <div className="control-row control-row-compact">
-                        <Bot size={16} aria-hidden="true" className="control-leading-icon" />
-                        <select
-                          id="provider-select"
-                          className="input input-model compact-input"
-                          aria-label="Provider"
-                          value={provider}
-                          onChange={(e) => {
-                            onProviderChange(e.target.value)
-                            onModelChange('')
-                          }}
-                        >
-                          <option value="">Select provider</option>
-                          {PROVIDER_OPTIONS.map((opt) => (
-                            <option key={opt.value} value={opt.value}>{opt.label}</option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-
-                    {/* API Key */}
-                    <div className="panel-field-group">
-                      <div className="panel-label-row">
-                        <label htmlFor="api-key-input" className="field-label field-label-stack">API Key</label>
-                        <button
-                          type="button"
-                          className="icon-button icon-info"
-                          onClick={() => setActiveModal('byok')}
-                          aria-label="About API keys"
-                        >
-                          <Info size={18} />
-                        </button>
-                      </div>
-                      <div className="control-row control-row-compact">
-                        <KeyRound size={16} aria-hidden="true" className="control-leading-icon" />
-                        <input
-                          id="api-key-input"
-                          className="input compact-input compact-input-key"
-                          type={isApiKeyVisible ? 'text' : 'password'}
-                          value={apiKey}
-                          placeholder={API_KEY_PLACEHOLDER[provider] ?? 'Enter your API key'}
-                          aria-label="API key"
-                          onChange={(e) => onApiKeyChange(e.target.value)}
-                        />
-                        <button
-                          type="button"
-                          className="eye-toggle-btn"
-                          onClick={() => setIsApiKeyVisible((v) => !v)}
-                          aria-label={isApiKeyVisible ? 'Hide key' : 'Show key'}
-                          title={isApiKeyVisible ? 'Hide key' : 'Show key'}
-                        >
-                          {isApiKeyVisible ? <EyeOff size={14} /> : <Eye size={14} />}
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Model — free-text input with datalist suggestions */}
-                    <div className="panel-field-group">
-                      <div className="panel-label-row">
-                        <label htmlFor="model-input" className="field-label field-label-stack">Model</label>
-                        <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-                          {canFetchModels && (
-                            <button
-                              type="button"
-                              className="icon-button icon-info"
-                              onClick={handleFetchModels}
-                              disabled={isFetchingModels}
-                              aria-label="Fetch available models from Ollama Cloud"
-                              title="Fetch available models"
-                            >
-                              <RefreshCw size={16} className={isFetchingModels ? 'spin' : ''} />
-                            </button>
-                          )}
-                          <button
-                            type="button"
-                            className="icon-button icon-info"
-                            onClick={() => setActiveModal('model')}
-                            aria-label="Model information"
-                          >
-                            <Info size={18} />
-                          </button>
-                        </div>
-                      </div>
-                      <div className="control-row control-row-compact">
-                        <Bot size={16} aria-hidden="true" className="control-leading-icon" />
-                        <input
-                          id="model-input"
-                          list="model-datalist"
-                          className="input input-model compact-input"
-                          value={model}
-                          placeholder={provider ? 'Type or select a model...' : 'Select a provider first'}
-                          disabled={!provider}
-                          autoComplete="off"
-                          onChange={(e) => onModelChange(e.target.value)}
-                        />
-                        <datalist id="model-datalist">
-                          {modelSuggestions.map((m) => (
-                            <option key={m} value={m} />
-                          ))}
-                        </datalist>
-                      </div>
-                      {modelFetchError && (
-                        <p className="byok-inline-error" role="alert" style={{ marginTop: '4px' }}>
-                          {modelFetchError}
-                        </p>
-                      )}
-                      {canFetchModels && !modelFetchError && (
-                        <p className="byok-inline-error" style={{ color: 'var(--text3)', marginTop: '4px' }}>
-                          {isFetchingModels
-                            ? 'Fetching available models...'
-                            : 'Click the refresh icon to load your available Ollama Cloud models.'}
-                        </p>
-                      )}
-                    </div>
-
-                    {byokValidationMessage && (
-                      <p className="byok-inline-error" role="alert">
-                        {byokValidationMessage}
-                      </p>
-                    )}
-
-                    <div className="reset-divider" aria-hidden="true" />
-                    <button type="button" className="button button-reset" onClick={() => setActiveModal('reset')}>
-                      Reset session
-                    </button>
-                  </div>
+                  {renderByokFields()}
                 </div>
               </div>
             )}
           </div>
         </div>
+
       </header>
 
       <InfoModal isOpen={activeModal === 'byok'} onClose={closeModal} title="Provider &amp; API Key">

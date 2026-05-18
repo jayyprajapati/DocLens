@@ -1,3 +1,5 @@
+import base64
+import json
 import os
 import tempfile
 import time
@@ -5,10 +7,11 @@ import time
 import requests
 from typing import List, Literal, Optional
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
+from app.config import CORTEX_BASE_URL
 from app.services.delete_service import run_delete, run_delete_all
 from app.services.document_registry import (
     list_documents,
@@ -18,6 +21,14 @@ from app.services.document_registry import (
 )
 from app.services.ingest_service import run_ingest
 from app.services.query_service import run_query
+from services.rag_client import (
+    chat as rag_chat,
+    delete_thread as rag_delete_thread,
+    get_thread as rag_get_thread,
+    list_threads as rag_list_threads,
+    patch_thread as rag_patch_thread,
+    stream_chat as rag_stream_chat,
+)
 
 
 router = APIRouter()
@@ -27,20 +38,73 @@ VALID_PROVIDERS = {"openai", "ollama_cloud"}
 
 class QueryRequest(BaseModel):
     query: str
-    user_id: str
-    api_key: str = Field(min_length=1)
-    model: str = Field(min_length=1)
+    user_id: Optional[str] = None
+    api_key: Optional[str] = None
+    model: Optional[str] = None
     provider: Literal["openai", "ollama_cloud"] = "openai"
     doc_ids: Optional[List[str]] = None
 
 
+class ChatRequest(BaseModel):
+    query: str
+    user_id: Optional[str] = None
+    api_key: Optional[str] = None
+    model: Optional[str] = None
+    provider: Literal["openai", "ollama_cloud"] = "openai"
+    thread_id: Optional[str] = None
+    doc_ids: Optional[List[str]] = None
+
+
+class ThreadPatchRequest(BaseModel):
+    title: Optional[str] = None
+
+
 class DeleteRequest(BaseModel):
-    user_id: str = Field(min_length=1)
     doc_id: str = Field(min_length=1)
 
 
 class DeleteAllRequest(BaseModel):
-    user_id: str = Field(min_length=1)
+    pass
+
+
+def _decode_b64url(value):
+    padding = "=" * (-len(value) % 4)
+    return base64.urlsafe_b64decode((value + padding).encode("utf-8"))
+
+
+def _user_id_from_request(request: Request, fallback=None):
+    fallback = (fallback or "").strip()
+    auth_header = request.headers.get("Authorization", "")
+    token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
+    if token:
+        try:
+            parts = token.split(".")
+            if len(parts) >= 2:
+                payload = json.loads(_decode_b64url(parts[1]).decode("utf-8"))
+                sub = str(payload.get("sub") or "").strip()
+                if sub:
+                    return sub
+        except Exception:
+            pass
+
+    if fallback:
+        return fallback
+
+    raise HTTPException(status_code=401, detail="Authorization bearer token with sub claim is required")
+
+
+def _llm_options(payload):
+    api_key = (payload.api_key or "").strip()
+    model = (payload.model or "").strip()
+    if not api_key:
+        raise HTTPException(status_code=400, detail="API key is required.")
+    if not model:
+        raise HTTPException(status_code=400, detail="Model is required.")
+    return {
+        "provider": payload.provider,
+        "api_key": api_key,
+        "model": model,
+    }
 
 
 def _extract_doc_id(ingest_result):
@@ -117,11 +181,22 @@ def _handle_upstream_error(exc, action):
     )
 
 
+def _sse_event(event_type, data):
+    return f"event: {event_type}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+
+def _latest_thread_id(user_id):
+    data = rag_list_threads(user_id=user_id, app_name="doclens", base_url=CORTEX_BASE_URL, timeout=10)
+    threads = data.get("threads", []) if isinstance(data, dict) else []
+    if not threads:
+        return None
+    return threads[0].get("id")
+
+
 @router.get("/documents")
-def list_documents_endpoint(user_id: str):
-    if not user_id.strip():
-        return _error_response(400, "invalid_user", "user_id is required")
-    docs = list_documents(user_id.strip())
+def list_documents_endpoint(request: Request, user_id: Optional[str] = None):
+    resolved_user_id = _user_id_from_request(request, user_id)
+    docs = list_documents(resolved_user_id)
     for d in docs:
         if not d.get("filename"):
             d["filename"] = f"doc-{d['doc_id'][:8]}"
@@ -161,22 +236,19 @@ def list_models_endpoint(provider: str, api_key: str = ""):
 
 
 @router.post("/query")
-def query_endpoint(request: QueryRequest):
+def query_endpoint(http_request: Request, request: QueryRequest):
+    user_id = _user_id_from_request(http_request, request.user_id)
     # Auto-scope to the user's only document if they have exactly one
-    user_docs = list_documents(request.user_id)
+    user_docs = list_documents(user_id)
     auto_doc_ids = [user_docs[0]["doc_id"]] if len(user_docs) == 1 else None
 
-    llm = {
-        "provider": request.provider,
-        "api_key": request.api_key,
-        "model": request.model,
-    }
+    llm = _llm_options(request)
 
     final_doc_ids = request.doc_ids or auto_doc_ids
 
     start = time.perf_counter()
     try:
-        result = run_query(query=request.query, user_id=request.user_id, llm=llm, doc_ids=final_doc_ids)
+        result = run_query(query=request.query, user_id=user_id, llm=llm, doc_ids=final_doc_ids)
     except requests.HTTPError as exc:
         return _handle_upstream_error(exc, "Query")
     except requests.RequestException as exc:
@@ -189,12 +261,179 @@ def query_endpoint(request: QueryRequest):
     return payload
 
 
+@router.post("/chat")
+def chat_endpoint(http_request: Request, request: ChatRequest):
+    """Multi-turn chat with persisted thread history (handled by Cortex)."""
+    user_id = _user_id_from_request(http_request, request.user_id)
+
+    # First turn of a fresh thread: auto-scope to the user's only document.
+    # On subsequent turns Cortex uses the thread's stored doc_ids, so we only
+    # need to provide doc_ids when creating the thread.
+    explicit_doc_ids = request.doc_ids
+    if not request.thread_id and not explicit_doc_ids:
+        user_docs = list_documents(user_id)
+        if len(user_docs) == 1:
+            explicit_doc_ids = [user_docs[0]["doc_id"]]
+
+    llm = _llm_options(request)
+
+    start = time.perf_counter()
+    try:
+        result = rag_chat(
+            query=request.query,
+            user_id=user_id,
+            thread_id=request.thread_id,
+            doc_ids=explicit_doc_ids,
+            llm=llm,
+            base_url=CORTEX_BASE_URL,
+        )
+    except requests.HTTPError as exc:
+        return _handle_upstream_error(exc, "Chat")
+    except requests.RequestException as exc:
+        return _error_response(
+            502, "upstream_error",
+            "Chat failed: could not reach Cortex.",
+            {"upstream_detail": str(exc)},
+        )
+
+    elapsed_ms = (time.perf_counter() - start) * 1000
+    payload = dict(result) if isinstance(result, dict) else {"result": result}
+    payload["meta"] = _build_meta(payload.get("meta"), elapsed_ms)
+    return payload
+
+
+@router.post("/chat/stream")
+def chat_stream_endpoint(http_request: Request, request: ChatRequest):
+    """Proxy Cortex /chat SSE and append DocLens thread metadata at the end."""
+    user_id = _user_id_from_request(http_request, request.user_id)
+
+    explicit_doc_ids = request.doc_ids
+    if not request.thread_id and not explicit_doc_ids:
+        user_docs = list_documents(user_id)
+        if len(user_docs) == 1:
+            explicit_doc_ids = [user_docs[0]["doc_id"]]
+
+    llm = _llm_options(request)
+
+    try:
+        upstream = rag_stream_chat(
+            query=request.query,
+            user_id=user_id,
+            thread_id=request.thread_id,
+            doc_ids=explicit_doc_ids,
+            llm=llm,
+            base_url=CORTEX_BASE_URL,
+        )
+    except requests.HTTPError as exc:
+        return _handle_upstream_error(exc, "Chat")
+    except requests.RequestException as exc:
+        return _error_response(
+            502, "upstream_error",
+            "Chat failed: could not reach Cortex.",
+            {"upstream_detail": str(exc)},
+        )
+
+    def _proxy():
+        try:
+            for chunk in upstream.iter_content(chunk_size=1024):
+                if chunk:
+                    yield chunk
+        finally:
+            upstream.close()
+
+        thread_id = request.thread_id
+        if not thread_id:
+            try:
+                thread_id = _latest_thread_id(user_id)
+            except requests.RequestException:
+                thread_id = None
+
+        if thread_id:
+            yield _sse_event("thread", {"thread_id": thread_id}).encode("utf-8")
+
+    return StreamingResponse(
+        _proxy(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+@router.get("/threads")
+def list_threads_endpoint(request: Request, user_id: Optional[str] = None):
+    user_id = _user_id_from_request(request, user_id)
+    try:
+        return rag_list_threads(user_id=user_id, app_name="doclens", base_url=CORTEX_BASE_URL)
+    except requests.HTTPError as exc:
+        return _handle_upstream_error(exc, "List threads")
+    except requests.RequestException as exc:
+        return _error_response(
+            502, "upstream_error",
+            "List threads failed: could not reach Cortex.",
+            {"upstream_detail": str(exc)},
+        )
+
+
+@router.get("/threads/{thread_id}")
+def get_thread_endpoint(thread_id: str, request: Request, user_id: Optional[str] = None):
+    user_id = _user_id_from_request(request, user_id)
+    try:
+        return rag_get_thread(thread_id=thread_id, user_id=user_id, base_url=CORTEX_BASE_URL)
+    except requests.HTTPError as exc:
+        return _handle_upstream_error(exc, "Get thread")
+    except requests.RequestException as exc:
+        return _error_response(
+            502, "upstream_error",
+            "Get thread failed: could not reach Cortex.",
+            {"upstream_detail": str(exc)},
+        )
+
+
+@router.delete("/threads/{thread_id}")
+def delete_thread_endpoint(thread_id: str, request: Request, user_id: Optional[str] = None):
+    user_id = _user_id_from_request(request, user_id)
+    try:
+        return rag_delete_thread(thread_id=thread_id, user_id=user_id, base_url=CORTEX_BASE_URL)
+    except requests.HTTPError as exc:
+        return _handle_upstream_error(exc, "Delete thread")
+    except requests.RequestException as exc:
+        return _error_response(
+            502, "upstream_error",
+            "Delete thread failed: could not reach Cortex.",
+            {"upstream_detail": str(exc)},
+        )
+
+
+@router.patch("/threads/{thread_id}")
+def patch_thread_endpoint(thread_id: str, request: ThreadPatchRequest, http_request: Request, user_id: Optional[str] = None):
+    user_id = _user_id_from_request(http_request, user_id)
+    try:
+        return rag_patch_thread(
+            thread_id=thread_id,
+            user_id=user_id,
+            title=request.title,
+            base_url=CORTEX_BASE_URL,
+        )
+    except requests.HTTPError as exc:
+        return _handle_upstream_error(exc, "Update thread")
+    except requests.RequestException as exc:
+        return _error_response(
+            502, "upstream_error",
+            "Update thread failed: could not reach Cortex.",
+            {"upstream_detail": str(exc)},
+        )
+
+
 @router.post("/ingest")
 async def ingest_endpoint(
+    request: Request,
     file: UploadFile = File(...),
-    user_id: str = Form(...),
-    api_key: str = Form(...),
+    user_id: Optional[str] = Form(None),
+    api_key: str = Form(""),
 ):
+    user_id = _user_id_from_request(request, user_id)
     if not api_key.strip():
         return _error_response(400, "byok_required", "API key is required to upload documents.")
 
@@ -234,26 +473,33 @@ async def ingest_endpoint(
 
 
 @router.post("/delete")
-def delete_endpoint(request: DeleteRequest):
+def delete_endpoint(http_request: Request, request: DeleteRequest):
+    user_id = _user_id_from_request(http_request)
     start = time.perf_counter()
     try:
-        result = run_delete(user_id=request.user_id, doc_id=request.doc_id, app_name="doclens")
-        remove_document(user_id=request.user_id, doc_id=request.doc_id)
-        elapsed_ms = (time.perf_counter() - start) * 1000
-        return {"status": "success", "result": result, "meta": _build_meta({}, elapsed_ms)}
+        result = run_delete(user_id=user_id, doc_id=request.doc_id, app_name="doclens")
     except requests.HTTPError as exc:
+        # Document no longer exists in the vector store — clean up registry anyway
+        if exc.response is not None and exc.response.status_code == 404:
+            remove_document(user_id=user_id, doc_id=request.doc_id)
+            elapsed_ms = (time.perf_counter() - start) * 1000
+            return {"status": "success", "result": {"deleted_points": 0}, "meta": _build_meta({}, elapsed_ms)}
         return _handle_upstream_error(exc, "Delete")
     except requests.RequestException as exc:
         return _error_response(502, "upstream_error", "Delete failed: could not reach Cortex.",
                                {"upstream_detail": str(exc)})
+    remove_document(user_id=user_id, doc_id=request.doc_id)
+    elapsed_ms = (time.perf_counter() - start) * 1000
+    return {"status": "success", "result": result, "meta": _build_meta({}, elapsed_ms)}
 
 
 @router.post("/delete_all")
-def delete_all_endpoint(request: DeleteAllRequest):
+def delete_all_endpoint(http_request: Request, _request: DeleteAllRequest):
+    user_id = _user_id_from_request(http_request)
     start = time.perf_counter()
     try:
-        result = run_delete_all(user_id=request.user_id, app_name="doclens")
-        remove_all_documents(user_id=request.user_id)
+        result = run_delete_all(user_id=user_id, app_name="doclens")
+        remove_all_documents(user_id=user_id)
         elapsed_ms = (time.perf_counter() - start) * 1000
         return {"status": "success", "result": result, "meta": _build_meta({}, elapsed_ms)}
     except requests.HTTPError as exc:

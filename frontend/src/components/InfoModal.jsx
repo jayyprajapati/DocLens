@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { AnimatePresence, motion } from 'framer-motion'
+import { AnimatePresence, motion as Motion } from 'framer-motion'
 import { X } from 'lucide-react'
 
 function InfoModal({ isOpen, onClose, title, children, footer = null }) {
@@ -13,7 +13,7 @@ function InfoModal({ isOpen, onClose, title, children, footer = null }) {
   return (
     <AnimatePresence>
       {isOpen && (
-        <motion.div
+        <Motion.div
           className="modal-overlay"
           onClick={onClose}
           initial={{ opacity: 0 }}
@@ -21,7 +21,7 @@ function InfoModal({ isOpen, onClose, title, children, footer = null }) {
           exit={{ opacity: 0 }}
           transition={{ duration: 0.15 }}
         >
-          <motion.div
+          <Motion.div
             className="modal-box"
             role="dialog"
             aria-modal="true"
@@ -47,8 +47,8 @@ function InfoModal({ isOpen, onClose, title, children, footer = null }) {
                 <button type="button" className="button" onClick={onClose}>Close</button>
               </div>
             )}
-          </motion.div>
-        </motion.div>
+          </Motion.div>
+        </Motion.div>
       )}
     </AnimatePresence>
   )

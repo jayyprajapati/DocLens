@@ -3,8 +3,10 @@ import logging
 
 import requests
 
+from app.config import CORTEX_BASE_URL
 from app.services.delete_service import run_delete
 from app.services.document_registry import list_expired_documents, remove_document
+from services.rag_client import is_available as is_cortex_available
 
 
 LOGGER = logging.getLogger(__name__)
@@ -15,6 +17,16 @@ CLEANUP_INTERVAL_SECONDS = 60 * 60
 
 async def run_cleanup_once():
     expired_docs = list_expired_documents(max_age_hours=DOC_EXPIRY_HOURS)
+    if not expired_docs:
+        return
+
+    cortex_ready = await asyncio.to_thread(is_cortex_available, CORTEX_BASE_URL, 3)
+    if not cortex_ready:
+        LOGGER.info(
+            "Skipping expired document cleanup because Cortex is unavailable at %s; will retry later",
+            CORTEX_BASE_URL,
+        )
+        return
 
     for doc in expired_docs:
         user_id = doc["user_id"]

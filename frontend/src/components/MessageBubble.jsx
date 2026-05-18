@@ -1,7 +1,27 @@
-import { useEffect, useMemo, useState } from 'react'
-import { motion } from 'framer-motion'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { motion as Motion } from 'framer-motion'
 import ReactMarkdown from 'react-markdown'
 import { Bot, Check, Copy, FileText, Search, UserRound } from 'lucide-react'
+import CitationDrawer from './CitationDrawer'
+
+// Convert [N] citation markers to markdown links so ReactMarkdown can intercept them.
+// e.g. "see [1] and [2, 3]" → "see [¹](cit://1) and [²](cit://2) [³](cit://3)"
+const CITATION_RE = /\[(\d+(?:\s*,\s*\d+)*)\]/g
+
+function superscriptDigit(n) {
+  const map = { 0:'⁰',1:'¹',2:'²',3:'³',4:'⁴',5:'⁵',6:'⁶',7:'⁷',8:'⁸',9:'⁹' }
+  return String(n).split('').map(c => map[c] || c).join('')
+}
+
+function preprocess(text) {
+  if (!text) return ''
+  return text.replace(CITATION_RE, (_, inner) => {
+    return inner.split(',').map(s => {
+      const n = s.trim()
+      return `[${superscriptDigit(n)}](cit://${n})`
+    }).join(' ')
+  })
+}
 
 const TYPING_STEP = 3
 const TYPING_INTERVAL = 12
@@ -88,31 +108,79 @@ function SourceList({ sources }) {
   )
 }
 
+// Custom link component: intercepts cit://N links and renders as superscript citation buttons.
+function makeCitationLinkComponent(sources, openCitation) {
+  return function CitLink({ href, children }) {
+    if (href && href.startsWith('cit://')) {
+      const n = parseInt(href.slice(6), 10)
+      const source = Array.isArray(sources) ? sources[n - 1] : null
+      return (
+        <sup>
+          <button
+            type="button"
+            className="cit-sup-btn"
+            onClick={() => source && openCitation({ index: n, ...source })}
+            title={source ? `Source ${n}: ${source.section || ''}` : `Source ${n}`}
+          >
+            {children}
+          </button>
+        </sup>
+      )
+    }
+    return <a href={href} target="_blank" rel="noopener noreferrer">{children}</a>
+  }
+}
+
 // Typing animation for the embedded answer inside a timeline thread
-function AnswerBlock({ answer, sources, retrieveMs, generateMs }) {
+function AnswerBlock({ answer, sources, retrieveMs, generateMs, streaming = false }) {
   const [typed, setTyped] = useState('')
+  const [activeCitation, setActiveCitation] = useState(null)
+  const streamedAnswerRef = useRef(false)
 
   useEffect(() => {
-    if (!answer) return
+    if (!answer) {
+      const t = setTimeout(() => setTyped(''), 0)
+      return () => clearTimeout(t)
+    }
+    if (streaming) {
+      streamedAnswerRef.current = true
+      const t = setTimeout(() => setTyped(answer), 0)
+      return () => clearTimeout(t)
+    }
+    if (streamedAnswerRef.current) {
+      const t = setTimeout(() => {
+        setTyped(answer)
+        streamedAnswerRef.current = false
+      }, 0)
+      return () => clearTimeout(t)
+    }
     let i = 0
-    setTyped('')
     const iv = setInterval(() => {
       i = Math.min(i + TYPING_STEP, answer.length)
       setTyped(answer.slice(0, i))
       if (i >= answer.length) clearInterval(iv)
     }, TYPING_INTERVAL)
     return () => clearInterval(iv)
-  }, [answer])
+  }, [answer, streaming])
 
-  const isTyping = typed.length < (answer?.length || 0)
+  const displayedAnswer = streaming ? answer : typed
+  const isTyping = !streaming && typed.length < (answer?.length || 0)
   const totalSecs = retrieveMs != null || generateMs != null
     ? (((retrieveMs || 0) + (generateMs || 0)) / 1000).toFixed(1)
     : null
 
+  const citLink = useMemo(
+    () => makeCitationLinkComponent(sources, setActiveCitation),
+    [sources],
+  )
+
   return (
     <div className="tl-answer-body">
-      <ReactMarkdown>{typed}</ReactMarkdown>
+      <ReactMarkdown components={{ a: citLink }}>{preprocess(displayedAnswer)}</ReactMarkdown>
       {isTyping && <span className="typing-cursor" aria-hidden="true" />}
+      {activeCitation && (
+        <CitationDrawer citation={activeCitation} onClose={() => setActiveCitation(null)} />
+      )}
       {!isTyping && sources?.length > 0 && <SourceList sources={sources} />}
       {!isTyping && answer && (
         <div className="tl-answer-footer">
@@ -141,11 +209,12 @@ function TimelineMessage({ message }) {
     : (query ? (query.length > 72 ? `${query.slice(0, 70)}…` : query) : 'Query')
 
   const hasAnswer       = operation === 'query' && result?.answer
+  const hasQueryResult  = operation === 'query' && result && !result?.answer
   const hasUploadResult = operation === 'upload' && result
   const hasFailed       = Boolean(error)
 
   return (
-    <motion.div
+    <Motion.div
       className="tl-thread"
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
@@ -160,7 +229,7 @@ function TimelineMessage({ message }) {
       {/* Stage rows */}
       {stages.map((stage, idx) => {
         const isLast = idx === stages.length - 1
-        const showLine = !isLast || hasAnswer || hasUploadResult || hasFailed
+        const showLine = !isLast || hasAnswer || hasQueryResult || hasUploadResult || hasFailed
         const timeLabel = stage.status === 'done' && stage.elapsedMs != null
           ? ` (${stage.elapsedMs}ms)`
           : ''
@@ -194,6 +263,17 @@ function TimelineMessage({ message }) {
         </div>
       )}
 
+      {hasQueryResult && !hasFailed && (
+        <div className="tl-row">
+          <div className="tl-rail">
+            <Knot status="done" />
+          </div>
+          <div className="tl-stage-content tl-complete-row">
+            <span className="tl-complete-text">Answer ready</span>
+          </div>
+        </div>
+      )}
+
       {/* Answer node (query only) */}
       {hasAnswer && (
         <div className="tl-row tl-answer-row">
@@ -206,6 +286,7 @@ function TimelineMessage({ message }) {
               sources={result.sources}
               retrieveMs={result.retrieve_ms}
               generateMs={result.generate_ms}
+              streaming={Boolean(result.streaming)}
             />
           </div>
         </div>
@@ -222,7 +303,7 @@ function TimelineMessage({ message }) {
           </div>
         </div>
       )}
-    </motion.div>
+    </Motion.div>
   )
 }
 
@@ -231,7 +312,7 @@ function TimelineMessage({ message }) {
 function DocSelectMessage({ message, onDocSelect }) {
   const { query, documents = [] } = message
   return (
-    <motion.div
+    <Motion.div
       className="doc-select-msg"
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
@@ -253,7 +334,7 @@ function DocSelectMessage({ message, onDocSelect }) {
           </button>
         ))}
       </div>
-    </motion.div>
+    </Motion.div>
   )
 }
 
@@ -267,28 +348,49 @@ function MessageBubble({ message, onDocSelect }) {
   const isDocSelect = message.role === 'doc-select'
   const hasSources  = isAssistant && Array.isArray(message.sources) && message.sources.length > 0
 
+  const skipTyping = Boolean(message.skipTyping)
+  const typingRunRef = useRef('')
   const [typedContent, setTypedContent] = useState(
-    isAssistant ? '' : typeof message.content === 'string' ? message.content : '',
+    isAssistant && !skipTyping ? '' : typeof message.content === 'string' ? message.content : '',
   )
+  const [activeCitation, setActiveCitation] = useState(null)
 
   useEffect(() => {
     const content = typeof message.content === 'string' ? message.content : ''
-    if (!isAssistant) { setTypedContent(content); return }
+    const runKey = `${message.id}:${content.length}:${skipTyping}`
+    typingRunRef.current = runKey
+    if (!isAssistant || skipTyping) {
+      const t = setTimeout(() => {
+        if (typingRunRef.current === runKey) setTypedContent(content)
+      }, 0)
+      return () => clearTimeout(t)
+    }
     let i = 0
-    setTypedContent('')
+    const resetTimer = setTimeout(() => {
+      if (typingRunRef.current === runKey) setTypedContent('')
+    }, 0)
     const iv = setInterval(() => {
       i = Math.min(i + TYPING_STEP, content.length)
+      if (typingRunRef.current !== runKey) return
       setTypedContent(content.slice(0, i))
       if (i >= content.length) clearInterval(iv)
     }, TYPING_INTERVAL)
-    return () => clearInterval(iv)
-  }, [isAssistant, message.content, message.id])
+    return () => {
+      clearTimeout(resetTimer)
+      clearInterval(iv)
+    }
+  }, [isAssistant, message.content, message.id, skipTyping])
 
   const isTyping = isAssistant && typedContent.length < (message.content?.length || 0)
   const displayContent = useMemo(() => {
     if (isAssistant) return typedContent
     return typeof message.content === 'string' ? message.content : ''
   }, [isAssistant, message.content, typedContent])
+
+  const citLink = useMemo(
+    () => makeCitationLinkComponent(message.sources, setActiveCitation),
+    [message.sources],
+  )
 
   if (isTimeline)  return <TimelineMessage message={message} />
   if (isDocSelect) return <DocSelectMessage message={message} onDocSelect={onDocSelect} />
@@ -301,15 +403,18 @@ function MessageBubble({ message, onDocSelect }) {
   const rawContent = typeof message.content === 'string' ? message.content : ''
 
   return (
-    <motion.div
+    <Motion.div
       className={`msg-row ${isUser ? 'msg-user' : 'msg-assistant'}`}
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.18, ease: 'easeOut' }}
     >
       {!isUser && (
-        <div className="msg-avatar msg-avatar-assistant" aria-hidden="true">
-          <Bot size={14} />
+        <div className="msg-avatar-wrap" aria-hidden="true">
+          <div className="msg-avatar msg-avatar-assistant">
+            <Bot size={14} />
+          </div>
+          <span className="msg-avatar-label">Lume</span>
         </div>
       )}
 
@@ -317,19 +422,25 @@ function MessageBubble({ message, onDocSelect }) {
         <div className={`msg-bubble ${isUser ? 'bubble-user' : 'bubble-assistant'}`}>
           {isUser
             ? <p>{displayContent}</p>
-            : <ReactMarkdown>{displayContent}</ReactMarkdown>}
+            : <ReactMarkdown components={{ a: citLink }}>{preprocess(displayContent)}</ReactMarkdown>}
           {isTyping && <span className="typing-cursor" aria-hidden="true" />}
+          {isAssistant && activeCitation && (
+            <CitationDrawer citation={activeCitation} onClose={() => setActiveCitation(null)} />
+          )}
           {isAssistant && hasSources && !isTyping && <SourceList sources={message.sources} />}
         </div>
         <CopyButton text={rawContent} />
       </div>
 
       {isUser && (
-        <div className="msg-avatar msg-avatar-user" aria-hidden="true">
-          <UserRound size={14} />
+        <div className="msg-avatar-wrap" aria-hidden="true">
+          <div className="msg-avatar msg-avatar-user">
+            <UserRound size={14} />
+          </div>
+          <span className="msg-avatar-label">You</span>
         </div>
       )}
-    </motion.div>
+    </Motion.div>
   )
 }
 

@@ -85,9 +85,17 @@ npm install
 ```env
 # URL of the Cortex RAG engine
 CORTEX_BASE_URL=http://localhost:8000
+
+# Use development locally; use production in deployment.
+APP_ENV=development
+
+# Production should set this to the exact frontend origin.
+CORS_ALLOWED_ORIGINS=https://doclens.jayprajapati.dev
 ```
 
 That is the only required variable. DocLens does not manage LLM keys server-side — they are passed per request from the user's browser session.
+
+In non-dev environments, DocLens disables `/docs`, `/redoc`, `/openapi`, `/openapi.json`, and `/docs/oauth2-redirect`, and rejects API requests without an allowed `Origin` or `Referer`.
 
 ### Frontend (`frontend/.env`)
 
@@ -136,7 +144,7 @@ Open `http://localhost:3000` in your browser.
 
 ## API Reference
 
-The DocLens backend exposes four endpoints. All LLM calls require `api_key` and `model`.
+The DocLens backend exposes stable app-level endpoints. All LLM calls require `api_key` and `model`; upstream grounded chat is handled through Cortex `/chat`.
 
 ### POST /query
 
@@ -203,6 +211,7 @@ curl -X POST http://localhost:8001/delete_all \
 | Endpoint | Required fields |
 |---|---|
 | `/query` | `query`, `user_id`, `api_key`, `model` |
+| `/chat` / `/chat/stream` | `query`, `user_id`, `api_key`, `model` |
 | `/ingest` | `file` (multipart), `user_id`, `api_key` |
 | `/delete` | `user_id`, `doc_id` |
 | `/delete_all` | `user_id` |
@@ -227,7 +236,7 @@ File size and page count are unlimited — Cortex handles chunking and ingestion
 
 - Documents are indexed into Cortex under the `doclens` collection, scoped by `user_id`.
 - DocLens tracks each document in a local file registry (`backend/app/data/document_registry.json`).
-- Documents older than 24 hours are automatically deleted from Cortex by the background cleanup task.
+- Documents older than 24 hours are automatically deleted from Cortex by the background cleanup task. Cleanup first checks Cortex `/health`; if Cortex is unavailable, it skips the pass and retries later.
 - Resetting the session calls `/delete_all` to remove all documents from Cortex immediately.
 
 ---
@@ -280,10 +289,10 @@ DocLens/
 ├── backend/
 │   ├── app/
 │   │   ├── api/
-│   │   │   └── routes.py          # /ingest, /query, /delete, /delete_all
+│   │   │   └── routes.py          # /ingest, /query, /chat, /chat/stream, /delete, /delete_all
 │   │   ├── services/
 │   │   │   ├── ingest_service.py  # forwards to Cortex /ingest
-│   │   │   ├── query_service.py   # forwards to Cortex /query with BYOK llm config
+│   │   │   ├── query_service.py   # forwards to Cortex /chat?stream=false with BYOK llm config
 │   │   │   ├── delete_service.py  # forwards to Cortex /delete, /delete_all
 │   │   │   ├── document_registry.py  # file-based doc tracking for cleanup
 │   │   │   └── cleanup_service.py    # background task: delete expired docs
