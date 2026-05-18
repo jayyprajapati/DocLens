@@ -243,7 +243,7 @@ function Header({
           <FileSearchCorner className="title-icon" size={28} aria-hidden="true" />
           <div className="title-text-block">
             <h1 className="title">DocLens</h1>
-            <p className="title-subtitle">Upload a document and chat with answers grounded in its content.</p>
+            <p className="title-subtitle">A cited chat workspace for serious documents.</p>
           </div>
         </div>
 
@@ -257,7 +257,7 @@ function Header({
               aria-expanded={openDropdown === 'byok'}
               aria-controls="byok-dropdown-panel"
             >
-              API Settings
+              Settings
               <ChevronDown size={16} aria-hidden="true" />
             </button>
 

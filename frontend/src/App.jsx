@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 import { getUserId } from './services/auth'
 import Header from './components/Header'
@@ -16,7 +16,7 @@ import {
   ingest,
   listThreads,
   renameThread,
-  streamChat,
+  chat as sendChat,
 } from './services/api'
 import './App.css'
 
@@ -28,6 +28,7 @@ const STORAGE_KEYS = {
   theme: 'doclens_theme',
   activeThreadId: 'doclens_active_thread_id',
   sidebarOpen: 'doclens_sidebar_open',
+  threadSummaries: 'doclens_thread_summaries',
 }
 
 const UPLOAD_STAGES = [
@@ -46,6 +47,8 @@ const QUERY_STAGES = [
 
 const UPLOAD_PACE = [300, 900, 1600, 700]
 const QUERY_PACE  = [250, 550, 450, 350]
+const DRAFT_THREAD_ID = '__doclens_new_chat__'
+const TITLE_MAX_CHARS = 58
 
 // Detects if a query ambiguously references a single document
 const AMBIGUOUS_DOC_RE = /\b(this|the)\s+(doc(ument)?|file|pdf|report|text|content|paper)\b/i
@@ -76,6 +79,82 @@ function getDocumentTypeMeta(fileName) {
   if (ext === 'docx' || ext === 'doc') return { typeLabel: 'DOCX', typeClassName: 'type-docx' }
   if (ext === 'md' || ext === 'markdown') return { typeLabel: 'MD', typeClassName: 'type-md' }
   return { typeLabel: 'FILE', typeClassName: 'type-generic' }
+}
+
+function cleanTitleText(value) {
+  return String(value || '')
+    .replace(/\.[a-z0-9]{2,8}$/i, '')
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .replace(/[?.!,:;]+$/g, '')
+    .trim()
+}
+
+function compactTitle(value, maxChars = TITLE_MAX_CHARS) {
+  const clean = cleanTitleText(value)
+  if (!clean) return ''
+  if (clean.length <= maxChars) return clean
+  const words = clean.split(' ')
+  let title = ''
+  for (const word of words) {
+    const next = title ? `${title} ${word}` : word
+    if (next.length > maxChars - 1) break
+    title = next
+  }
+  return title ? `${title}…` : `${clean.slice(0, maxChars - 1).trim()}…`
+}
+
+function getDocumentLabel(filename) {
+  const clean = compactTitle(filename, 42)
+  return clean || 'document'
+}
+
+function getLatestUploadedFilename(messages) {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const message = messages[i]
+    if (message?.role === 'timeline' && message.operation === 'upload' && message.filename) {
+      return message.filename
+    }
+  }
+  return ''
+}
+
+function buildQueryTitle(query, docName = '') {
+  const raw = cleanTitleText(query)
+  if (!raw) return docName ? `Question on ${getDocumentLabel(docName)}` : 'New document chat'
+
+  if (docName && /\b(this|the)\s+(doc(ument)?|file|pdf|report|text|content|paper)\b/i.test(raw)) {
+    if (/\bsummari[sz]e|summary|overview|brief\b/i.test(raw)) {
+      return compactTitle(`Summary of ${getDocumentLabel(docName)}`)
+    }
+    return compactTitle(`Question on ${getDocumentLabel(docName)}`)
+  }
+
+  const withoutPoliteLead = raw
+    .replace(/^(please\s+)?(can|could|would)\s+you\s+/i, '')
+    .replace(/^(please\s+)?(tell me about|give me|show me|find|list|explain)\s+/i, '')
+  return compactTitle(withoutPoliteLead || raw)
+}
+
+function buildThreadTitle(query, { chat, documents, docIds } = {}) {
+  const scopedDoc = Array.isArray(docIds) && docIds.length
+    ? documents.find((doc) => docIds.includes(doc.doc_id))?.name
+    : ''
+  const latestUpload = getLatestUploadedFilename(chat || [])
+  return buildQueryTitle(query, scopedDoc || latestUpload)
+}
+
+function getDraftThreadTitle() {
+  return 'New Chat'
+}
+
+function getStoredThreadSummaries() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(STORAGE_KEYS.threadSummaries) || '[]')
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
 }
 
 function getDocIdFromIngestResponse(payload) {
@@ -125,7 +204,7 @@ export default function App() {
   const [activeThreadId, setActiveThreadId] = useState(
     () => localStorage.getItem(STORAGE_KEYS.activeThreadId) || null,
   )
-  const [threads, setThreads] = useState([])
+  const [threads, setThreads] = useState(() => getStoredThreadSummaries())
   const [isSidebarOpen, setIsSidebarOpen] = useState(
     () => localStorage.getItem(STORAGE_KEYS.sidebarOpen) !== 'false',
   )
@@ -137,6 +216,19 @@ export default function App() {
   const byokValidationMessage = getByokValidationMessage(apiKey, selectedModel, provider)
   const isByokReady = !byokValidationMessage
   const inputLocked = loadingState !== 'idle'
+  const sidebarThreads = useMemo(() => {
+    if (activeThreadId) return threads
+    const draftThread = {
+      id: DRAFT_THREAD_ID,
+      title: getDraftThreadTitle(),
+      message_count: chat.filter((message) => message.role !== 'system').length,
+      updated_at: null,
+      isDraft: true,
+    }
+    return [draftThread, ...threads.filter((thread) => thread.id !== DRAFT_THREAD_ID)]
+  }, [activeThreadId, chat, threads])
+  const sidebarActiveThreadId = activeThreadId || DRAFT_THREAD_ID
+  const canStartNewChat = Boolean(activeThreadId) && !inputLocked
 
   // Apply theme class to root
   useEffect(() => {
@@ -151,6 +243,9 @@ export default function App() {
   useEffect(() => { localStorage.setItem(STORAGE_KEYS.provider, provider) }, [provider])
   useEffect(() => { localStorage.setItem(STORAGE_KEYS.theme, theme) }, [theme])
   useEffect(() => { localStorage.setItem(STORAGE_KEYS.sidebarOpen, String(isSidebarOpen)) }, [isSidebarOpen])
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.threadSummaries, JSON.stringify(threads))
+  }, [threads])
   useEffect(() => {
     if (activeThreadId) localStorage.setItem(STORAGE_KEYS.activeThreadId, activeThreadId)
     else localStorage.removeItem(STORAGE_KEYS.activeThreadId)
@@ -174,9 +269,10 @@ export default function App() {
   const refreshThreads = async () => {
     try {
       const data = await listThreads()
-      setThreads(Array.isArray(data?.threads) ? data.threads : [])
+      const nextThreads = Array.isArray(data?.threads) ? data.threads : []
+      setThreads((prev) => nextThreads.length > 0 || prev.length === 0 ? nextThreads : prev)
     } catch {
-      setThreads([])
+      setThreads((prev) => prev)
     }
   }
 
@@ -215,6 +311,21 @@ export default function App() {
   // ─── message helpers ────────────────────────────────────────────
   const addMessage = (msg) => setChat((prev) => [...prev, msg])
   const updateMessage = (id, fn) => setChat((prev) => prev.map((m) => m.id === id ? fn(m) : m))
+  const upsertThreadSummary = (threadId, title) => {
+    if (!threadId) return
+    const now = Math.floor(Date.now() / 1000)
+    setThreads((prev) => {
+      const existing = prev.find((thread) => thread.id === threadId)
+      const next = {
+        ...existing,
+        id: threadId,
+        title: title || existing?.title || 'New document chat',
+        updated_at: now,
+        message_count: Math.max(existing?.message_count || 0, 2),
+      }
+      return [next, ...prev.filter((thread) => thread.id !== threadId)]
+    })
+  }
 
   // ─── stage animation with per-stage timing ──────────────────────
   function startStageProgress(timelineId, stageDefs, pace) {
@@ -284,60 +395,62 @@ export default function App() {
 
     try {
       const wasNewThread = !activeThreadId
-      const result = await streamChat({
+      const result = await sendChat({
         query: text,
         apiKey,
         model: selectedModel,
         provider,
         threadId: activeThreadId,
         docIds,
-        onEvent: (_event, partial) => {
-          if (!partial?.answer) return
-          updateMessage(timelineId, (m) => ({
-            ...m,
-            result: {
-              ...(m.result || {}),
-              answer: partial.answer,
-              sources: partial.citations,
-              grounded: partial.grounded,
-              retrieve_ms: partial.meta?.retrieve_ms ?? m.result?.retrieve_ms ?? null,
-              generate_ms: partial.meta?.generate_ms ?? m.result?.generate_ms ?? null,
-              streaming: true,
-            },
-          }))
-        },
       })
+
+      const generatedTitle = buildThreadTitle(text, { chat, documents, docIds })
 
       // Pick up new thread id if Cortex just created one
       if (result?.thread_id && result.thread_id !== activeThreadId) {
+        upsertThreadSummary(result.thread_id, generatedTitle)
         setActiveThreadId(result.thread_id)
       }
 
       const meta = result?.meta || {}
+      const answer = typeof result?.answer === 'string'
+        ? result.answer
+        : (result?.answer && JSON.stringify(result.answer)) || 'No response returned.'
+      const sources = Array.isArray(result?.citations) && result.citations.length
+        ? result.citations
+        : (Array.isArray(result?.sources) ? result.sources : [])
+
       completeStages(timelineId, {
         retrieved: meta.retrieved_count ?? null,
         reranked: meta.reranked_count ?? null,
-        retrieve_ms: meta.retrieve_ms ?? null,
-        generate_ms: meta.generate_ms ?? null,
-        answer: typeof result?.answer === 'string'
-          ? result.answer
-          : (result?.answer && JSON.stringify(result.answer)) || 'No response returned.',
-        sources: Array.isArray(result?.citations) && result.citations.length
-          ? result.citations
-          : (Array.isArray(result?.sources) ? result.sources : []),
+        retrieve_ms: meta.retrieve_ms ?? meta.retrieval_time ?? null,
+        generate_ms: meta.generate_ms ?? meta.generation_time ?? null,
         grounded: result?.grounded ?? null,
         streaming: false,
       })
 
+      addMessage({
+        id: uuidv4(),
+        role: 'assistant',
+        content: answer,
+        sources,
+      })
+
       if (wasNewThread && result?.thread_id) {
-        const title = text.trim().split(/\s+/).slice(0, 8).join(' ').slice(0, 60)
-        if (title.length >= 3) {
-          renameThread(result.thread_id, title).then(refreshThreads).catch(() => refreshThreads())
+        if (generatedTitle.length >= 3) {
+          try {
+            await renameThread(result.thread_id, generatedTitle)
+          } catch {
+            // Keep the answered turn intact even if Cortex rejects a title patch.
+          } finally {
+            await refreshThreads()
+          }
         } else {
-          refreshThreads()
+          await refreshThreads()
         }
+      } else {
+        await refreshThreads()
       }
-      refreshThreads()
     } catch (error) {
       failStages(timelineId, extractBestError(error))
     } finally {
@@ -375,12 +488,21 @@ export default function App() {
   }
 
   const handleNewChat = () => {
+    if (!canStartNewChat) return
     setActiveThreadId(null)
     setChat([])
     setInlineFeedback(null)
   }
 
   const handleSelectThread = async (threadId) => {
+    if (threadId === DRAFT_THREAD_ID) {
+      if (activeThreadId) {
+        setActiveThreadId(null)
+        setChat([])
+        setInlineFeedback(null)
+      }
+      return
+    }
     if (threadId === activeThreadId) return
     // Restore from in-memory cache to preserve timeline timing data
     if (threadCacheRef.current[threadId]) {
@@ -414,6 +536,7 @@ export default function App() {
     setThreadPendingDeletion(null)
     try {
       await deleteThread(tid)
+      setThreads((prev) => prev.filter((thread) => thread.id !== tid))
       if (tid === activeThreadId) {
         setActiveThreadId(null)
         setChat([])
@@ -501,10 +624,11 @@ export default function App() {
     <div className="app-page">
       <div className="app-shell">
         <ThreadSidebar
-          threads={threads}
-          activeThreadId={activeThreadId}
+          threads={sidebarThreads}
+          activeThreadId={sidebarActiveThreadId}
           onSelect={handleSelectThread}
           onNewChat={handleNewChat}
+          canStartNewChat={canStartNewChat}
           onDelete={handleDeleteThread}
           isOpen={isSidebarOpen}
           onClose={() => setIsSidebarOpen(false)}
@@ -529,7 +653,11 @@ export default function App() {
           isSidebarOpen={isSidebarOpen}
           onSidebarToggle={() => setIsSidebarOpen((v) => !v)}
         />
-        <ChatWindow messages={chat} onDocSelect={handleDocSelect} />
+        <ChatWindow
+          messages={chat}
+          onDocSelect={handleDocSelect}
+          documents={documents}
+        />
         <InputBar
           onSend={handleSend} onUpload={handleUpload}
           isLocked={inputLocked} isSendDisabled={!isByokReady}

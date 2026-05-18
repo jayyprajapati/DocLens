@@ -89,8 +89,8 @@ function parseSseBlock(block) {
   return { event, data }
 }
 
-// POST /chat streams SSE by default in updated Cortex.
-// thread_id arrives in the `done` event (not a separate `thread` event).
+// POST /chat/stream proxies Cortex SSE and appends thread metadata.
+// thread_id may arrive in `done` or a separate `thread` event depending on backend version.
 export async function streamChat({ query, apiKey, model, provider, threadId, docIds, onEvent }) {
   const body = { query }
   if (apiKey?.trim()) body.api_key = apiKey.trim()
@@ -99,7 +99,7 @@ export async function streamChat({ query, apiKey, model, provider, threadId, doc
   if (threadId) body.thread_id = threadId
   if (Array.isArray(docIds) && docIds.length) body.doc_ids = docIds
 
-  const response = await fetch(`${API_BASE_URL}/chat`, {
+  const response = await fetch(`${API_BASE_URL}/chat/stream`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -110,6 +110,23 @@ export async function streamChat({ query, apiKey, model, provider, threadId, doc
   })
 
   if (!response.ok) return parseResponse(response)
+  const contentType = response.headers.get('content-type') || ''
+  if (contentType.includes('application/json')) {
+    const payload = await response.json()
+    const summary = {
+      answer: typeof payload?.answer === 'string'
+        ? payload.answer
+        : (payload?.answer && JSON.stringify(payload.answer)) || '',
+      citations: Array.isArray(payload?.citations)
+        ? payload.citations
+        : (Array.isArray(payload?.sources) ? payload.sources : []),
+      meta: payload?.meta || {},
+      grounded: payload?.grounded ?? null,
+      thread_id: payload?.thread_id || threadId || null,
+    }
+    onEvent?.({ event: 'done', data: payload }, { ...summary })
+    return summary
+  }
   if (!response.body) throw new Error('Streaming is not supported by this browser.')
 
   const reader = response.body.getReader()
@@ -144,6 +161,10 @@ export async function streamChat({ query, apiKey, model, provider, threadId, doc
         summary.meta = { ...summary.meta, ...(data && typeof data === 'object' ? data : {}) }
       } else if (event === 'done') {
         summary.meta = { ...summary.meta, ...(data && typeof data === 'object' ? data : {}) }
+        if (typeof data?.answer === 'string' && !summary.answer) summary.answer = data.answer
+        if (typeof data?.content === 'string' && !summary.answer) summary.answer = data.content
+        if (Array.isArray(data?.citations) && data.citations.length) summary.citations = data.citations
+        if (Array.isArray(data?.sources) && data.sources.length) summary.citations = data.sources
         if (typeof data?.grounded === 'boolean') summary.grounded = data.grounded
         // thread_id now arrives in done (not a separate thread event)
         if (data?.thread_id) summary.thread_id = data.thread_id

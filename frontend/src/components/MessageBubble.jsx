@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
-import { motion } from 'framer-motion'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { motion as Motion } from 'framer-motion'
 import ReactMarkdown from 'react-markdown'
 import { Bot, Check, Copy, FileText, Search, UserRound } from 'lucide-react'
 import CitationDrawer from './CitationDrawer'
@@ -135,9 +135,25 @@ function makeCitationLinkComponent(sources, openCitation) {
 function AnswerBlock({ answer, sources, retrieveMs, generateMs, streaming = false }) {
   const [typed, setTyped] = useState('')
   const [activeCitation, setActiveCitation] = useState(null)
+  const streamedAnswerRef = useRef(false)
 
   useEffect(() => {
-    if (!answer || streaming) return
+    if (!answer) {
+      const t = setTimeout(() => setTyped(''), 0)
+      return () => clearTimeout(t)
+    }
+    if (streaming) {
+      streamedAnswerRef.current = true
+      const t = setTimeout(() => setTyped(answer), 0)
+      return () => clearTimeout(t)
+    }
+    if (streamedAnswerRef.current) {
+      const t = setTimeout(() => {
+        setTyped(answer)
+        streamedAnswerRef.current = false
+      }, 0)
+      return () => clearTimeout(t)
+    }
     let i = 0
     const iv = setInterval(() => {
       i = Math.min(i + TYPING_STEP, answer.length)
@@ -193,11 +209,12 @@ function TimelineMessage({ message }) {
     : (query ? (query.length > 72 ? `${query.slice(0, 70)}…` : query) : 'Query')
 
   const hasAnswer       = operation === 'query' && result?.answer
+  const hasQueryResult  = operation === 'query' && result && !result?.answer
   const hasUploadResult = operation === 'upload' && result
   const hasFailed       = Boolean(error)
 
   return (
-    <motion.div
+    <Motion.div
       className="tl-thread"
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
@@ -212,7 +229,7 @@ function TimelineMessage({ message }) {
       {/* Stage rows */}
       {stages.map((stage, idx) => {
         const isLast = idx === stages.length - 1
-        const showLine = !isLast || hasAnswer || hasUploadResult || hasFailed
+        const showLine = !isLast || hasAnswer || hasQueryResult || hasUploadResult || hasFailed
         const timeLabel = stage.status === 'done' && stage.elapsedMs != null
           ? ` (${stage.elapsedMs}ms)`
           : ''
@@ -246,6 +263,17 @@ function TimelineMessage({ message }) {
         </div>
       )}
 
+      {hasQueryResult && !hasFailed && (
+        <div className="tl-row">
+          <div className="tl-rail">
+            <Knot status="done" />
+          </div>
+          <div className="tl-stage-content tl-complete-row">
+            <span className="tl-complete-text">Answer ready</span>
+          </div>
+        </div>
+      )}
+
       {/* Answer node (query only) */}
       {hasAnswer && (
         <div className="tl-row tl-answer-row">
@@ -275,7 +303,7 @@ function TimelineMessage({ message }) {
           </div>
         </div>
       )}
-    </motion.div>
+    </Motion.div>
   )
 }
 
@@ -284,7 +312,7 @@ function TimelineMessage({ message }) {
 function DocSelectMessage({ message, onDocSelect }) {
   const { query, documents = [] } = message
   return (
-    <motion.div
+    <Motion.div
       className="doc-select-msg"
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
@@ -306,7 +334,7 @@ function DocSelectMessage({ message, onDocSelect }) {
           </button>
         ))}
       </div>
-    </motion.div>
+    </Motion.div>
   )
 }
 
@@ -321,6 +349,7 @@ function MessageBubble({ message, onDocSelect }) {
   const hasSources  = isAssistant && Array.isArray(message.sources) && message.sources.length > 0
 
   const skipTyping = Boolean(message.skipTyping)
+  const typingRunRef = useRef('')
   const [typedContent, setTypedContent] = useState(
     isAssistant && !skipTyping ? '' : typeof message.content === 'string' ? message.content : '',
   )
@@ -328,15 +357,28 @@ function MessageBubble({ message, onDocSelect }) {
 
   useEffect(() => {
     const content = typeof message.content === 'string' ? message.content : ''
-    if (!isAssistant || skipTyping) { setTypedContent(content); return }
+    const runKey = `${message.id}:${content.length}:${skipTyping}`
+    typingRunRef.current = runKey
+    if (!isAssistant || skipTyping) {
+      const t = setTimeout(() => {
+        if (typingRunRef.current === runKey) setTypedContent(content)
+      }, 0)
+      return () => clearTimeout(t)
+    }
     let i = 0
-    setTypedContent('')
+    const resetTimer = setTimeout(() => {
+      if (typingRunRef.current === runKey) setTypedContent('')
+    }, 0)
     const iv = setInterval(() => {
       i = Math.min(i + TYPING_STEP, content.length)
+      if (typingRunRef.current !== runKey) return
       setTypedContent(content.slice(0, i))
       if (i >= content.length) clearInterval(iv)
     }, TYPING_INTERVAL)
-    return () => clearInterval(iv)
+    return () => {
+      clearTimeout(resetTimer)
+      clearInterval(iv)
+    }
   }, [isAssistant, message.content, message.id, skipTyping])
 
   const isTyping = isAssistant && typedContent.length < (message.content?.length || 0)
@@ -361,7 +403,7 @@ function MessageBubble({ message, onDocSelect }) {
   const rawContent = typeof message.content === 'string' ? message.content : ''
 
   return (
-    <motion.div
+    <Motion.div
       className={`msg-row ${isUser ? 'msg-user' : 'msg-assistant'}`}
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
@@ -398,7 +440,7 @@ function MessageBubble({ message, onDocSelect }) {
           <span className="msg-avatar-label">You</span>
         </div>
       )}
-    </motion.div>
+    </Motion.div>
   )
 }
 

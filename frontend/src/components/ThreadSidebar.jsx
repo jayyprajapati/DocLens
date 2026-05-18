@@ -36,6 +36,7 @@ export default function ThreadSidebar({
   activeThreadId,
   onSelect,
   onNewChat,
+  canStartNewChat = true,
   onDelete,
   isOpen,
   onClose,
@@ -81,15 +82,16 @@ export default function ThreadSidebar({
       <aside className={`thread-sidebar ${isOpen ? 'open' : 'closed'}`} aria-hidden={!isOpen}>
         <div className="thread-sidebar-inner">
           <div className="thread-sidebar-header">
-            <span className="thread-sidebar-title">Chats</span>
+            <span className="thread-sidebar-title">Conversations</span>
             <div className="thread-header-actions">
               <button
                 type="button"
                 className="thread-new-button"
                 onClick={handleNewChat}
+                disabled={!canStartNewChat}
                 title="Start a new chat"
               >
-                + New
+                New
               </button>
               <button
                 type="button"
@@ -104,15 +106,16 @@ export default function ThreadSidebar({
 
           <ul className="thread-list">
             {threads.length === 0 && (
-              <li className="thread-empty">No chats yet.</li>
+              <li className="thread-empty">New conversations will appear here after your first question.</li>
             )}
             {threads.map((t) => {
               const isActive = t.id === activeThreadId
               const isHover = t.id === hoveredId
+              const isDraft = Boolean(t.isDraft)
               return (
                 <li
                   key={t.id}
-                  className={`thread-item ${isActive ? 'active' : ''}`}
+                  className={`thread-item ${isActive ? 'active' : ''} ${isDraft ? 'draft' : ''}`}
                   onMouseEnter={() => setHoveredId(t.id)}
                   onMouseLeave={() => setHoveredId(null)}
                 >
@@ -125,11 +128,12 @@ export default function ThreadSidebar({
                       {t.title || 'Untitled chat'}
                     </span>
                     <span className="thread-item-meta">
-                      {t.message_count ? `${t.message_count} msgs · ` : ''}
-                      {formatRelativeTime(t.updated_at)}
+                      {isDraft
+                        ? 'Draft conversation'
+                        : `${t.message_count ? `${t.message_count} msgs · ` : ''}${formatRelativeTime(t.updated_at)}`}
                     </span>
                   </button>
-                  {(isHover || isActive) && (
+                  {!isDraft && (isHover || isActive) && (
                     <button
                       type="button"
                       className="thread-delete"

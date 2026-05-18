@@ -6,11 +6,8 @@ function InputBar({
   onUpload,
   isLocked,
   isSendDisabled = false,
-  loadingState,
-  loadingTask,
   documents = [],
   onRequestRemoveDocument = () => {},
-  userId = '',
 }) {
   const [value, setValue] = useState('')
   const fileInputRef = useRef(null)
