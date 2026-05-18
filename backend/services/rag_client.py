@@ -33,6 +33,15 @@ def _auth(user_id):
     return {"Authorization": f"Bearer {_make_token(user_id)}"}
 
 
+def is_available(base_url=None, timeout=3):
+    endpoint = (base_url or DEFAULT_RAG_API_BASE_URL).rstrip("/") + "/health"
+    try:
+        response = requests.get(endpoint, timeout=timeout)
+        return response.ok
+    except requests.RequestException:
+        return False
+
+
 def query(
     query,
     user_id,

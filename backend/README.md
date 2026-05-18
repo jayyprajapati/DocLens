@@ -57,6 +57,7 @@ DocLens adds application-level metadata and policy checks before forwarding:
 - `user_id` scoping
 - app name tagging (`app_name=doclens`)
 - optional BYOK-driven model/key configuration
+- a bearer token whose `sub` claim is the DocLens `user_id`, matching Cortex's current JWT-scoped API contract
 
 ### Operational workflow
 
@@ -107,6 +108,7 @@ Optional:
 ```env
 RAG_API_BASE_URL=http://localhost:8000
 DEFAULT_MODEL=gpt-4o-mini
+CORS_ALLOWED_ORIGINS=https://doclens.jayprajapati.dev
 ```
 
 Behavior:
@@ -114,11 +116,17 @@ Behavior:
 - `CORTEX_BASE_URL` is preferred for upstream calls.
 - `RAG_API_BASE_URL` is a fallback.
 - If neither is set, default is `http://localhost:8000`.
+- Background document cleanup probes `CORTEX_BASE_URL/health` before calling Cortex delete endpoints. If Cortex is down, cleanup is skipped and retried later.
+- `/docs`, `/redoc`, `/openapi`, `/openapi.json`, and `/docs/oauth2-redirect` are enabled only when `APP_ENV`, `ENV`, or `PYTHON_ENV` is explicitly `dev`, `development`, or `local`.
+- In non-dev environments, API requests without an allowed `Origin` or `Referer` are rejected with `403`.
 
 ### Local vs production
 
 - Local: point `CORTEX_BASE_URL` to local Cortex (for example `http://localhost:8000`).
+- Local: set `APP_ENV=development` to enable docs and direct local API calls.
+- Cortex local dev should run with `APP_ENV=development` so its JWT middleware accepts development bearer tokens.
 - Production: point `CORTEX_BASE_URL` to a private internal Cortex address (not publicly exposed).
+- Production: set `APP_ENV=production` and `CORS_ALLOWED_ORIGINS` to the exact frontend origin.
 
 ## 6. Running Locally
 
@@ -224,7 +232,7 @@ app.add_middleware(
 )
 ```
 
-Production rule: allow only trusted frontend origins, never wildcard all origins.
+Production rule: allow only trusted frontend origins, never wildcard all origins. The same allowlist is used to reject non-dev API requests that do not come from an allowed `Origin` or `Referer`.
 
 ## 11. API Endpoints
 

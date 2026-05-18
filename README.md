@@ -85,9 +85,17 @@ npm install
 ```env
 # URL of the Cortex RAG engine
 CORTEX_BASE_URL=http://localhost:8000
+
+# Use development locally; use production in deployment.
+APP_ENV=development
+
+# Production should set this to the exact frontend origin.
+CORS_ALLOWED_ORIGINS=https://doclens.jayprajapati.dev
 ```
 
 That is the only required variable. DocLens does not manage LLM keys server-side — they are passed per request from the user's browser session.
+
+In non-dev environments, DocLens disables `/docs`, `/redoc`, `/openapi`, `/openapi.json`, and `/docs/oauth2-redirect`, and rejects API requests without an allowed `Origin` or `Referer`.
 
 ### Frontend (`frontend/.env`)
 
@@ -228,7 +236,7 @@ File size and page count are unlimited — Cortex handles chunking and ingestion
 
 - Documents are indexed into Cortex under the `doclens` collection, scoped by `user_id`.
 - DocLens tracks each document in a local file registry (`backend/app/data/document_registry.json`).
-- Documents older than 24 hours are automatically deleted from Cortex by the background cleanup task.
+- Documents older than 24 hours are automatically deleted from Cortex by the background cleanup task. Cleanup first checks Cortex `/health`; if Cortex is unavailable, it skips the pass and retries later.
 - Resetting the session calls `/delete_all` to remove all documents from Cortex immediately.
 
 ---
