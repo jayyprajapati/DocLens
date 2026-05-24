@@ -10,12 +10,15 @@ import ThreadSidebar from './components/ThreadSidebar'
 import {
   deleteAllDocuments,
   deleteDocument,
+  deleteResource,
   deleteThread,
   getDocuments,
   getThread,
   ingest,
+  listResources,
   listThreads,
   renameThread,
+  uploadResource,
   chat as sendChat,
 } from './services/api'
 import './App.css'
@@ -201,6 +204,9 @@ export default function App() {
   const [documentPendingDeletion, setDocumentPendingDeletion] = useState(null)
   const [isDeletingDocument, setIsDeletingDocument] = useState(false)
 
+  const [resources, setResources]             = useState([])
+  const [resourcesLoading, setResourcesLoading] = useState(false)
+
   const [activeThreadId, setActiveThreadId] = useState(
     () => localStorage.getItem(STORAGE_KEYS.activeThreadId) || null,
   )
@@ -277,6 +283,40 @@ export default function App() {
   }
 
   useEffect(() => { refreshThreads() }, [userId])
+
+  // Load workspace resources on mount
+  const loadResources = async () => {
+    try {
+      const data = await listResources()
+      setResources(data.documents || [])
+    } catch {
+      // non-fatal — sidebar will show empty state
+    }
+  }
+
+  useEffect(() => { loadResources() }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleResourceUpload = async (file) => {
+    if (!file) return
+    setResourcesLoading(true)
+    try {
+      await uploadResource(file)
+      await loadResources()
+    } catch {
+      // leave loading false, silent failure
+    } finally {
+      setResourcesLoading(false)
+    }
+  }
+
+  const handleResourceDelete = async (docId) => {
+    try {
+      await deleteResource(docId)
+      setResources((prev) => prev.filter((d) => (d.id || d.doc_id) !== docId))
+    } catch {
+      // silent failure — list will still reflect the attempted removal
+    }
+  }
 
   // If we have a persisted activeThreadId, hydrate its messages on mount
   useEffect(() => {
@@ -570,7 +610,7 @@ export default function App() {
     startStageProgress(timelineId, UPLOAD_STAGES, UPLOAD_PACE)
 
     try {
-      const ingestResult = await ingest(file, apiKey)
+      const ingestResult = await ingest(file, apiKey, activeThreadId)
       const docId = getDocIdFromIngestResponse(ingestResult)
       if (!docId) throw new Error('Upload response missing document identifier.')
 
@@ -643,6 +683,10 @@ export default function App() {
           onModelChange={setSelectedModel}
           onProviderChange={setProvider}
           onReset={handleReset}
+          resources={resources}
+          resourcesLoading={resourcesLoading}
+          onResourceUpload={handleResourceUpload}
+          onResourceDelete={handleResourceDelete}
         />
         <div className="app-shell-main">
         <Header

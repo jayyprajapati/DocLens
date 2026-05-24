@@ -217,10 +217,11 @@ export async function renameThread(threadId, title) {
   return parseResponse(response)
 }
 
-export async function ingest(file, apiKey) {
+export async function ingest(file, apiKey, threadId) {
   const formData = new FormData()
   formData.append('file', file)
   if (apiKey?.trim()) formData.append('api_key', apiKey.trim())
+  if (threadId) formData.append('thread_id', threadId)
 
   return withBackoff(() =>
     fetch(`${API_BASE_URL}/ingest`, {
@@ -273,6 +274,30 @@ export async function deleteAllDocuments(apiKey) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
     body: JSON.stringify(body),
+  })
+  return parseResponse(response)
+}
+
+export async function listResources() {
+  const response = await fetch(`${API_BASE_URL}/resources`, { headers: getAuthHeaders() })
+  return parseResponse(response)
+}
+
+export async function uploadResource(file) {
+  const formData = new FormData()
+  formData.append('file', file)
+  const response = await fetch(`${API_BASE_URL}/resources`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: formData,
+  })
+  return parseResponse(response)
+}
+
+export async function deleteResource(docId) {
+  const response = await fetch(`${API_BASE_URL}/resources/${docId}`, {
+    method: 'DELETE',
+    headers: getAuthHeaders(),
   })
   return parseResponse(response)
 }

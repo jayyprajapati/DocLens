@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Bot, ExternalLink, Eye, EyeOff, KeyRound, X } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import './ThreadSidebar.css'
@@ -52,10 +52,23 @@ export default function ThreadSidebar({
   onModelChange,
   onProviderChange,
   onReset,
+  // Resources
+  resources = [],
+  resourcesLoading = false,
+  onResourceUpload,
+  onResourceDelete,
 }) {
   const [hoveredId, setHoveredId] = useState(null)
   const [isApiKeyVisible, setIsApiKeyVisible] = useState(false)
   const isDark = theme === 'dark'
+  const resourceInputRef = useRef(null)
+
+  const handleResourceFileChange = async (e) => {
+    const file = e.target.files[0]
+    if (!file) return
+    await onResourceUpload?.(file)
+    e.target.value = ''
+  }
 
   const handleSelectThread = (id) => {
     onSelect(id)
@@ -151,6 +164,52 @@ export default function ThreadSidebar({
               )
             })}
           </ul>
+
+          {/* Resources section */}
+          <div className="sidebar-resources">
+            <div className="sidebar-resources-header">
+              <span className="sidebar-section-label">Resources</span>
+              <label className="resource-upload-label" title="Upload shared resource" aria-label="Upload shared resource">
+                +
+                <input
+                  ref={resourceInputRef}
+                  type="file"
+                  className="resource-upload-input"
+                  onChange={handleResourceFileChange}
+                  disabled={resourcesLoading}
+                  accept=".pdf,.doc,.docx,.md,.txt"
+                />
+              </label>
+            </div>
+            {resourcesLoading && (
+              <p className="resource-loading">Uploading…</p>
+            )}
+            {!resourcesLoading && resources.length === 0 && (
+              <p className="resource-empty">No shared resources yet</p>
+            )}
+            {resources.length > 0 && (
+              <ul className="resource-list">
+                {resources.map((doc) => {
+                  const id = doc.id || doc.doc_id
+                  const name = doc.filename || doc.original_filename || id
+                  return (
+                    <li key={id} className="resource-item">
+                      <span className="resource-name" title={name}>{name}</span>
+                      <button
+                        type="button"
+                        className="resource-delete"
+                        onClick={() => onResourceDelete?.(id)}
+                        title="Remove resource"
+                        aria-label="Remove resource"
+                      >
+                        ×
+                      </button>
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
+          </div>
 
           {/* API Settings — only shown on mobile via CSS */}
           <div className="sidebar-api-settings">

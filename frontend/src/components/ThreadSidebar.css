@@ -220,6 +220,113 @@
   color: var(--red);
 }
 
+/* ── Resources section ─────────────────────────────────── */
+.sidebar-resources {
+  border-top: 1px solid var(--border);
+  padding: 12px 8px 8px;
+  flex-shrink: 0;
+}
+
+.sidebar-resources-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 4px 6px;
+}
+
+.resource-upload-label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface-raised);
+  color: var(--text3);
+  font-size: 17px;
+  line-height: 1;
+  cursor: pointer;
+  transition: color 140ms ease, background 140ms ease, border-color 140ms ease;
+}
+
+.resource-upload-label:hover {
+  border-color: var(--border-strong);
+  background: var(--surface-quiet);
+  color: var(--accent-text);
+}
+
+.resource-upload-input {
+  display: none;
+}
+
+.resource-loading,
+.resource-empty {
+  padding: 6px 4px;
+  color: var(--text3);
+  font-size: 12.5px;
+  line-height: 1.4;
+  margin: 0;
+}
+
+.resource-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.resource-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  border-radius: var(--radius);
+  padding: 6px 30px 6px 8px;
+  gap: 6px;
+}
+
+.resource-item:hover {
+  background: var(--surface-raised);
+}
+
+.resource-name {
+  flex: 1;
+  min-width: 0;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.resource-delete {
+  position: absolute;
+  right: 5px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text3);
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  display: none;
+  align-items: center;
+  justify-content: center;
+}
+
+.resource-item:hover .resource-delete {
+  display: flex;
+}
+
+.resource-delete:hover {
+  background: color-mix(in srgb, var(--red) 12%, transparent);
+  color: var(--red);
+}
+
 .sidebar-api-settings {
   display: none;
   flex-direction: column;
