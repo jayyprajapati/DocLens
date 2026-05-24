@@ -1,7 +1,5 @@
-import base64
 import json
 import os
-import tempfile
 import time
 
 import requests
@@ -10,15 +8,10 @@ from typing import List, Literal, Optional
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
+import base64
 
 from app.config import CORTEX_BASE_URL
 from app.services.delete_service import run_delete, run_delete_all
-from app.services.document_registry import (
-    list_documents,
-    register_document,
-    remove_all_documents,
-    remove_document,
-)
 from app.services.ingest_service import run_ingest
 from app.services.query_service import run_query
 from services.rag_client import (
@@ -28,6 +21,8 @@ from services.rag_client import (
     list_threads as rag_list_threads,
     patch_thread as rag_patch_thread,
     stream_chat as rag_stream_chat,
+    cortex,
+    WORKSPACE_ID as CORTEX_WORKSPACE_ID,
 )
 
 
@@ -194,12 +189,29 @@ def _latest_thread_id(user_id):
 
 
 @router.get("/documents")
-def list_documents_endpoint(request: Request, user_id: Optional[str] = None):
+async def list_documents_endpoint(request: Request, user_id: Optional[str] = None, thread_id: Optional[str] = None):
     resolved_user_id = _user_id_from_request(request, user_id)
-    docs = list_documents(resolved_user_id)
+    try:
+        if thread_id:
+            docs = await cortex.list_documents(
+                user_id=resolved_user_id,
+                workspace_id=CORTEX_WORKSPACE_ID,
+                scope_kind="thread",
+                scope_id=thread_id,
+            )
+        else:
+            docs = await cortex.list_documents(
+                user_id=resolved_user_id,
+                workspace_id=CORTEX_WORKSPACE_ID,
+                scope_kind="workspace",
+            )
+    except Exception as exc:
+        return _error_response(502, "upstream_error", "List documents failed: could not reach Cortex.",
+                               {"upstream_detail": str(exc)})
+
     for d in docs:
         if not d.get("filename"):
-            d["filename"] = f"doc-{d['doc_id'][:8]}"
+            d["filename"] = f"doc-{(d.get('doc_id') or d.get('id') or 'unknown')[:8]}"
     return {"documents": docs}
 
 
@@ -238,13 +250,10 @@ def list_models_endpoint(provider: str, api_key: str = ""):
 @router.post("/query")
 def query_endpoint(http_request: Request, request: QueryRequest):
     user_id = _user_id_from_request(http_request, request.user_id)
-    # Auto-scope to the user's only document if they have exactly one
-    user_docs = list_documents(user_id)
-    auto_doc_ids = [user_docs[0]["doc_id"]] if len(user_docs) == 1 else None
 
     llm = _llm_options(request)
 
-    final_doc_ids = request.doc_ids or auto_doc_ids
+    final_doc_ids = request.doc_ids
 
     start = time.perf_counter()
     try:
@@ -266,14 +275,7 @@ def chat_endpoint(http_request: Request, request: ChatRequest):
     """Multi-turn chat with persisted thread history (handled by Cortex)."""
     user_id = _user_id_from_request(http_request, request.user_id)
 
-    # First turn of a fresh thread: auto-scope to the user's only document.
-    # On subsequent turns Cortex uses the thread's stored doc_ids, so we only
-    # need to provide doc_ids when creating the thread.
     explicit_doc_ids = request.doc_ids
-    if not request.thread_id and not explicit_doc_ids:
-        user_docs = list_documents(user_id)
-        if len(user_docs) == 1:
-            explicit_doc_ids = [user_docs[0]["doc_id"]]
 
     llm = _llm_options(request)
 
@@ -308,10 +310,6 @@ def chat_stream_endpoint(http_request: Request, request: ChatRequest):
     user_id = _user_id_from_request(http_request, request.user_id)
 
     explicit_doc_ids = request.doc_ids
-    if not request.thread_id and not explicit_doc_ids:
-        user_docs = list_documents(user_id)
-        if len(user_docs) == 1:
-            explicit_doc_ids = [user_docs[0]["doc_id"]]
 
     llm = _llm_options(request)
 
@@ -432,27 +430,28 @@ async def ingest_endpoint(
     file: UploadFile = File(...),
     user_id: Optional[str] = Form(None),
     api_key: str = Form(""),
+    thread_id: Optional[str] = Form(None),
 ):
     user_id = _user_id_from_request(request, user_id)
     if not api_key.strip():
         return _error_response(400, "byok_required", "API key is required to upload documents.")
 
-    temp_path = None
     start = time.perf_counter()
 
     try:
-        suffix = os.path.splitext(file.filename or "")[1]
-        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-            temp_path = tmp.name
-            tmp.write(await file.read())
+        content = await file.read()
 
-        result = run_ingest(file_path=temp_path, user_id=user_id, app_name="doclens")
+        scope_kind = "thread" if thread_id else "workspace"
+        scope_id = thread_id if thread_id else CORTEX_WORKSPACE_ID
 
-        doc_id = _extract_doc_id(result)
-        if not doc_id:
-            return _error_response(500, "missing_doc_id", "Ingest response missing doc_id.")
-
-        register_document(user_id=user_id, doc_id=doc_id, filename=file.filename)
+        doc_id = await cortex.ingest(
+            file_bytes=content,
+            filename=file.filename,
+            user_id=user_id,
+            workspace_id=CORTEX_WORKSPACE_ID,
+            scope_kind=scope_kind,
+            scope_id=scope_id,
+        )
 
         elapsed_ms = (time.perf_counter() - start) * 1000
         return {
@@ -461,15 +460,62 @@ async def ingest_endpoint(
             "meta": _build_meta({}, elapsed_ms),
         }
 
-    except requests.HTTPError as exc:
-        return _handle_upstream_error(exc, "Ingest")
-    except requests.RequestException as exc:
+    except Exception as exc:
         return _error_response(502, "upstream_error", "Ingest failed: could not reach Cortex.",
                                {"upstream_detail": str(exc)})
     finally:
         await file.close()
-        if temp_path and os.path.exists(temp_path):
-            os.remove(temp_path)
+
+
+@router.post("/resources")
+async def upload_resource(
+    request: Request,
+    file: UploadFile = File(...),
+    user_id: Optional[str] = Form(None),
+):
+    resolved_user_id = _user_id_from_request(request, user_id)
+    try:
+        content = await file.read()
+        doc_id = await cortex.ingest(
+            file_bytes=content,
+            filename=file.filename,
+            user_id=resolved_user_id,
+            workspace_id=CORTEX_WORKSPACE_ID,
+            scope_kind="workspace",
+            scope_id=CORTEX_WORKSPACE_ID,
+        )
+        return {"status": "ok", "doc_id": doc_id, "filename": file.filename}
+    except Exception as exc:
+        return _error_response(502, "upstream_error", "Resource upload failed: could not reach Cortex.",
+                               {"upstream_detail": str(exc)})
+    finally:
+        await file.close()
+
+
+@router.get("/resources")
+async def list_resources(request: Request, user_id: Optional[str] = None):
+    resolved_user_id = _user_id_from_request(request, user_id)
+    try:
+        docs = await cortex.list_documents(
+            user_id=resolved_user_id,
+            workspace_id=CORTEX_WORKSPACE_ID,
+            scope_kind="workspace",
+        )
+        return {"documents": docs}
+    except Exception as exc:
+        return _error_response(502, "upstream_error", "List resources failed: could not reach Cortex.",
+                               {"upstream_detail": str(exc)})
+
+
+@router.delete("/resources/{doc_id}")
+async def delete_resource(doc_id: str, request: Request, user_id: Optional[str] = None):
+    resolved_user_id = _user_id_from_request(request, user_id)
+    try:
+        await cortex.delete_document(user_id=resolved_user_id, document_id=doc_id)
+        return {"status": "deleted"}
+    except Exception as exc:
+        return _error_response(502, "upstream_error", "Delete resource failed: could not reach Cortex.",
+                               {"upstream_detail": str(exc)})
 
 
 @router.post("/delete")
@@ -479,16 +525,13 @@ def delete_endpoint(http_request: Request, request: DeleteRequest):
     try:
         result = run_delete(user_id=user_id, doc_id=request.doc_id, app_name="doclens")
     except requests.HTTPError as exc:
-        # Document no longer exists in the vector store — clean up registry anyway
         if exc.response is not None and exc.response.status_code == 404:
-            remove_document(user_id=user_id, doc_id=request.doc_id)
             elapsed_ms = (time.perf_counter() - start) * 1000
             return {"status": "success", "result": {"deleted_points": 0}, "meta": _build_meta({}, elapsed_ms)}
         return _handle_upstream_error(exc, "Delete")
     except requests.RequestException as exc:
         return _error_response(502, "upstream_error", "Delete failed: could not reach Cortex.",
                                {"upstream_detail": str(exc)})
-    remove_document(user_id=user_id, doc_id=request.doc_id)
     elapsed_ms = (time.perf_counter() - start) * 1000
     return {"status": "success", "result": result, "meta": _build_meta({}, elapsed_ms)}
 
@@ -499,7 +542,6 @@ def delete_all_endpoint(http_request: Request, _request: DeleteAllRequest):
     start = time.perf_counter()
     try:
         result = run_delete_all(user_id=user_id, app_name="doclens")
-        remove_all_documents(user_id=user_id)
         elapsed_ms = (time.perf_counter() - start) * 1000
         return {"status": "success", "result": result, "meta": _build_meta({}, elapsed_ms)}
     except requests.HTTPError as exc:
