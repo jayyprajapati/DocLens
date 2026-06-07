@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { FileKey2, FileText, MessageSquareText, ShieldCheck } from 'lucide-react'
+import { BookOpen, FileSearch, FileText, KeyRound, MessageSquare } from 'lucide-react'
 import MessageBubble from './MessageBubble'
 
 function ChatWindow({ messages, onDocSelect, documents = [] }) {
@@ -15,59 +15,83 @@ function ChatWindow({ messages, onDocSelect, documents = [] }) {
       {messages.length === 0 && (
         <div className="empty-state">
           <div className="empty-hero">
-            <div className="empty-visual" aria-hidden="true">
-              <div className="empty-doc-mark">
-                <span className="empty-doc-shadow" />
-                <span className="empty-doc-page">
-                  <span className="empty-doc-fold" />
-                  <span className="empty-doc-rule rule-long" />
-                  <span className="empty-doc-rule rule-mid" />
-                  <span className="empty-doc-rule rule-short" />
-                  <span className="empty-doc-cite cite-one">1</span>
-                  <span className="empty-doc-cite cite-two">2</span>
-                </span>
-              </div>
-            </div>
-
-            <div className="empty-copy">
-              <p className="empty-eyebrow">Private document chat</p>
-              <h2 className="empty-wordmark">Read the source, then ask.</h2>
-              <p className="empty-note">
-                {hasDocuments ? `${documents.length} document${documents.length > 1 ? 's' : ''} ready in this chat.` : 'Start by attaching a PDF, DOCX, or Markdown file.'}
+            <span className="empty-hero-icon" aria-hidden="true">
+              <FileSearch size={28} strokeWidth={1.75} />
+            </span>
+            <div className="empty-hero-copy">
+              <h2 className="empty-app-name">
+                <span className="empty-title-line">DocLens,</span>
+                <span className="empty-title-highlight">answers drawn straight.</span>
+              </h2>
+              <p className="empty-tagline">
+                {hasDocuments
+                  ? `${documents.length} document${documents.length > 1 ? 's' : ''} attached — ask anything below.`
+                  : 'Upload documents. Ask questions. Get cited answers.'}
               </p>
             </div>
           </div>
 
-          <div className="empty-briefing" aria-label="Getting started">
-            <div className="briefing-item">
-              <FileText size={18} className="briefing-icon" />
-              <div>
-                <div className="briefing-title">Bring the document</div>
-                <div className="briefing-desc">Upload contracts, notes, reports, specs, or research files.</div>
-              </div>
+          {hasDocuments ? (
+            <div className="empty-docs-ready">
+              Your documents are ready. Type a question below to get started.
             </div>
-            <div className="briefing-item">
-              <MessageSquareText size={18} className="briefing-icon" />
-              <div>
-                <div className="briefing-title">Ask like you would ask a colleague</div>
-                <div className="briefing-desc">Request summaries, exact clauses, comparisons, or missing details.</div>
+          ) : (
+            <>
+              <div className="empty-feature-grid">
+                <div className="empty-feature-card">
+                  <span className="empty-feature-icon">
+                    <FileText size={19} aria-hidden="true" />
+                  </span>
+                  <div className="empty-feature-copy">
+                    <div className="empty-feature-title">Upload your documents</div>
+                    <div className="empty-feature-desc">
+                      PDF, DOCX, or Markdown. Attach per-chat with the paperclip or add to Resources to share across all conversations.
+                    </div>
+                  </div>
+                </div>
+
+                <div className="empty-feature-card">
+                  <span className="empty-feature-icon">
+                    <MessageSquare size={19} aria-hidden="true" />
+                  </span>
+                  <div className="empty-feature-copy">
+                    <div className="empty-feature-title">Ask in plain language</div>
+                    <div className="empty-feature-desc">
+                      Summarize a contract, extract clauses, compare sections — the same way you'd ask a colleague.
+                    </div>
+                  </div>
+                </div>
+
+                <div className="empty-feature-card">
+                  <span className="empty-feature-icon">
+                    <BookOpen size={19} aria-hidden="true" />
+                  </span>
+                  <div className="empty-feature-copy">
+                    <div className="empty-feature-title">Every answer is cited</div>
+                    <div className="empty-feature-desc">
+                      Each response includes the exact page, section, and passage it came from. Tap any marker to verify inline.
+                    </div>
+                  </div>
+                </div>
+
+                <div className="empty-feature-card">
+                  <span className="empty-feature-icon">
+                    <KeyRound size={19} aria-hidden="true" />
+                  </span>
+                  <div className="empty-feature-copy">
+                    <div className="empty-feature-title">Bring your own key</div>
+                    <div className="empty-feature-desc">
+                      BYOK — choose OpenAI, Claude, or Ollama Cloud. Your key stays in your browser and never touches DocLens servers.
+                    </div>
+                  </div>
+                </div>
               </div>
-            </div>
-            <div className="briefing-item">
-              <ShieldCheck size={18} className="briefing-icon" />
-              <div>
-                <div className="briefing-title">Keep the chain of evidence</div>
-                <div className="briefing-desc">Answers include sources, timings, and the retrieval timeline.</div>
+
+              <div className="empty-cta">
+                Use the <strong>paperclip</strong> icon to attach a file to this chat, or open <strong>Resources</strong> in the sidebar to upload files shared across all chats.
               </div>
-            </div>
-            <div className="briefing-item">
-              <FileKey2 size={18} className="briefing-icon" />
-              <div>
-                <div className="briefing-title">Bring your API key</div>
-                <div className="briefing-desc">Choose a provider, add your key, and select the model you want to use.</div>
-              </div>
-            </div>
-          </div>
+            </>
+          )}
         </div>
       )}
 

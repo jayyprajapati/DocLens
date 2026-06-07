@@ -1,4 +1,4 @@
-import { ArrowLeft, Database, LockKeyhole, ShieldCheck, Timer, Waypoints } from 'lucide-react'
+import { ArrowLeft, Database, KeyRound, ShieldCheck, Timer } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
 function PrivacyPage() {
@@ -6,83 +6,101 @@ function PrivacyPage() {
     <div className="legal-page">
       <div className="legal-shell">
         <header className="legal-header">
-          <h1>Privacy Policy</h1>
-          <p>
-            This policy explains how DocLens processes data across the React frontend, the FastAPI backend,
-            and the upstream retrieval service used for document grounded answers.
+          <div className="legal-header-topline">
+            <p className="legal-kicker">Privacy policy</p>
+            <Link className="legal-back-link" to="/">
+              <ArrowLeft size={16} aria-hidden="true" />
+              <span>Back to DocLens</span>
+            </Link>
+          </div>
+          <h1>
+            <span className="legal-title-line">Your documents,</span>
+            <span className="legal-title-highlight">handled with clarity.</span>
+          </h1>
+          <p className="legal-intro">
+            This policy explains what DocLens processes, how document-grounded answers are produced,
+            and the controls you have over files, chats, and API credentials.
           </p>
-          <p className="legal-meta">Last updated: March 2026</p>
+          <p className="legal-meta">Last updated · March 2026</p>
         </header>
 
-        <div className="legal-back-row">
-          <Link className="legal-back-link" to="/">
-            <ArrowLeft size={16} aria-hidden="true" />
-            <span>Go Back to DocLens</span>
-          </Link>
+        <div className="legal-summary" aria-label="Privacy summary">
+          <div className="legal-summary-item">
+            <span className="legal-summary-icon"><Timer size={18} aria-hidden="true" /></span>
+            <div className="legal-summary-copy">
+              <span className="legal-summary-value">24 hour expiry</span>
+              <span className="legal-summary-label">Documents are temporary and can be deleted sooner.</span>
+            </div>
+          </div>
+          <div className="legal-summary-item">
+            <span className="legal-summary-icon"><KeyRound size={18} aria-hidden="true" /></span>
+            <div className="legal-summary-copy">
+              <span className="legal-summary-value">Your key stays yours</span>
+              <span className="legal-summary-label">BYOK credentials remain in your browser session.</span>
+            </div>
+          </div>
+          <div className="legal-summary-item">
+            <span className="legal-summary-icon"><ShieldCheck size={18} aria-hidden="true" /></span>
+            <div className="legal-summary-copy">
+              <span className="legal-summary-value">You stay in control</span>
+              <span className="legal-summary-label">Delete resources, chats, or reset the full session.</span>
+            </div>
+          </div>
         </div>
 
         <section className="legal-section">
-          <h2><Database size={18} aria-hidden="true" /> Data Collection</h2>
-          <p>
-            DocLens collects the minimum information needed to run document Q&A:
-          </p>
+          <div className="legal-section-heading">
+            <span className="legal-section-index">01</span>
+            <span className="legal-section-icon"><Database size={18} aria-hidden="true" /></span>
+            <h2>What we process</h2>
+          </div>
+          <p>DocLens processes only the information required to run document Q&amp;A and keep chats separated.</p>
           <ul>
-            <li>Uploaded files for ingestion and retrieval, including PDF, DOCX/DOC, and Markdown content.</li>
-            <li>Session identifiers used to separate document scope between users in active sessions.</li>
-            <li>Question text submitted in the chat interface and system usage counters for limits.</li>
-            <li>Optional BYOK configuration provided in the client session (API key and model selection).</li>
+            <li>Uploaded PDF, DOCX, and Markdown content.</li>
+            <li>Questions, cited answers, and conversation history.</li>
+            <li>Session identifiers and basic usage counters.</li>
           </ul>
         </section>
 
         <section className="legal-section">
-          <h2><Waypoints size={18} aria-hidden="true" /> Data Usage</h2>
-          <p>
-            Data is used only to operate DocLens features. The frontend calls backend endpoints for
-            ingest/query actions, and the backend forwards those requests to the configured retrieval service.
-          </p>
+          <div className="legal-section-heading">
+            <span className="legal-section-index">02</span>
+            <span className="legal-section-icon"><ShieldCheck size={18} aria-hidden="true" /></span>
+            <h2>How it is used</h2>
+          </div>
+          <p>Your content is used to retrieve relevant passages and generate answers grounded in those sources.</p>
           <ul>
-            <li>Ingestion uploads a document for indexing and retrieval context.</li>
-            <li>Queries run retrieval + generation to produce grounded responses with sources.</li>
-            <li>System messages, usage state, and reset actions are used for product operation only.</li>
+            <li>No advertising, resale, or profile building.</li>
+            <li>Requests go only to the configured retrieval and model services.</li>
+            <li>Usage state supports limits, deletion, and product operation.</li>
           </ul>
         </section>
 
         <section className="legal-section">
-          <h2><Timer size={18} aria-hidden="true" /> Data Retention</h2>
-          <p>
-            Uploaded documents are temporary. DocLens tracks documents in a backend registry and runs an
-            hourly cleanup workflow that removes files older than 24 hours.
-          </p>
+          <div className="legal-section-heading">
+            <span className="legal-section-index">03</span>
+            <span className="legal-section-icon"><Timer size={18} aria-hidden="true" /></span>
+            <h2>Retention and deletion</h2>
+          </div>
+          <p>Uploaded documents are temporary and scheduled for removal after 24 hours.</p>
           <ul>
-            <li>Automatic expiry target: 24 hours from registration.</li>
-            <li>Cleanup cadence: approximately every 60 minutes.</li>
-            <li>Manual deletion is also available through reset and delete actions.</li>
+            <li>Cleanup runs approximately hourly.</li>
+            <li>Individual resources and conversations can be deleted sooner.</li>
+            <li>Reset clears session history and uploaded documents.</li>
           </ul>
         </section>
 
         <section className="legal-section">
-          <h2><LockKeyhole size={18} aria-hidden="true" /> BYOK</h2>
-          <p>
-            Bring Your Own Key (BYOK) lets you provide an API key and model for your own provider usage.
-            BYOK credentials are intended for request authorization and user-controlled model access.
-          </p>
+          <div className="legal-section-heading">
+            <span className="legal-section-index">04</span>
+            <span className="legal-section-icon"><KeyRound size={18} aria-hidden="true" /></span>
+            <h2>Your API key</h2>
+          </div>
+          <p>BYOK credentials stay in your browser session and authorize your selected provider.</p>
           <ul>
-            <li>BYOK values are held in client session storage to support ongoing interaction.</li>
-            <li>DocLens backend does not persist API keys as permanent database records.</li>
-            <li>You are responsible for protecting your own API credentials.</li>
-          </ul>
-        </section>
-
-        <section className="legal-section">
-          <h2><ShieldCheck size={18} aria-hidden="true" /> Security</h2>
-          <p>
-            DocLens applies standard service safeguards for local development and deployment hygiene,
-            including request validation and controlled endpoint behavior.
-          </p>
-          <ul>
-            <li>Backend acts as a gateway layer and normalizes requests before forwarding.</li>
-            <li>CORS boundaries are enforced for approved frontend origins.</li>
-            <li>You should run DocLens behind secure transport and infrastructure controls in production.</li>
+            <li>DocLens does not persist keys as permanent database records.</li>
+            <li>Your provider’s billing and access policies still apply.</li>
+            <li>Reset clears the key from the browser session.</li>
           </ul>
         </section>
       </div>

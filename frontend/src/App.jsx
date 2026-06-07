@@ -10,12 +10,15 @@ import ThreadSidebar from './components/ThreadSidebar'
 import {
   deleteAllDocuments,
   deleteDocument,
+  deleteResource,
   deleteThread,
   getDocuments,
   getThread,
   ingest,
+  listResources,
   listThreads,
   renameThread,
+  uploadResource,
   chat as sendChat,
 } from './services/api'
 import './App.css'
@@ -107,6 +110,19 @@ function compactTitle(value, maxChars = TITLE_MAX_CHARS) {
 function getDocumentLabel(filename) {
   const clean = compactTitle(filename, 42)
   return clean || 'document'
+}
+
+// Map server document rows → the shape the composer/attachment UI expects.
+function mapServerDocs(serverDocs) {
+  return (serverDocs || [])
+    .filter((d) => d && d.doc_id)
+    .map((d) => ({
+      id: uuidv4(),
+      doc_id: d.doc_id,
+      name: d.filename || `doc-${String(d.doc_id).slice(0, 8)}`,
+      status: 'uploaded',
+      ...getDocumentTypeMeta(d.filename || ''),
+    }))
 }
 
 function getLatestUploadedFilename(messages) {
@@ -201,6 +217,9 @@ export default function App() {
   const [documentPendingDeletion, setDocumentPendingDeletion] = useState(null)
   const [isDeletingDocument, setIsDeletingDocument] = useState(false)
 
+  const [resources, setResources]             = useState([])
+  const [resourcesLoading, setResourcesLoading] = useState(false)
+
   const [activeThreadId, setActiveThreadId] = useState(
     () => localStorage.getItem(STORAGE_KEYS.activeThreadId) || null,
   )
@@ -251,19 +270,17 @@ export default function App() {
     else localStorage.removeItem(STORAGE_KEYS.activeThreadId)
   }, [activeThreadId])
 
-  // Load persisted documents on mount
-  useEffect(() => {
-    getDocuments().then((data) => {
-      const docs = (data?.documents || []).map((d) => ({
-        id: uuidv4(),
-        doc_id: d.doc_id,
-        name: d.filename || `doc-${d.doc_id.slice(0, 8)}`,
-        status: 'uploaded',
-        ...getDocumentTypeMeta(d.filename || ''),
-      }))
-      if (docs.length) setDocuments(docs)
-    }).catch(() => {})
-  }, [userId])
+  // Per-chat attachments are loaded per active thread (see hydrate/select handlers),
+  // not globally — a thread's documents are private to that chat.
+  const loadThreadDocuments = async (threadId) => {
+    if (!threadId) { setDocuments([]); return }
+    try {
+      const data = await getDocuments(threadId)
+      setDocuments(mapServerDocs(data?.documents))
+    } catch {
+      setDocuments([])
+    }
+  }
 
   // Load threads list on mount
   const refreshThreads = async () => {
@@ -277,6 +294,40 @@ export default function App() {
   }
 
   useEffect(() => { refreshThreads() }, [userId])
+
+  // Load workspace resources on mount
+  const loadResources = async () => {
+    try {
+      const data = await listResources()
+      setResources(data.documents || [])
+    } catch {
+      // non-fatal — sidebar will show empty state
+    }
+  }
+
+  useEffect(() => { loadResources() }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleResourceUpload = async (file) => {
+    if (!file) return
+    setResourcesLoading(true)
+    try {
+      await uploadResource(file)
+      await loadResources()
+    } catch {
+      // leave loading false, silent failure
+    } finally {
+      setResourcesLoading(false)
+    }
+  }
+
+  const handleResourceDelete = async (docId) => {
+    try {
+      await deleteResource(docId)
+      setResources((prev) => prev.filter((d) => (d.id || d.doc_id) !== docId))
+    } catch {
+      // silent failure — list will still reflect the attempted removal
+    }
+  }
 
   // If we have a persisted activeThreadId, hydrate its messages on mount
   useEffect(() => {
@@ -292,10 +343,12 @@ export default function App() {
         skipTyping: true,
       }))
       setChat(loaded)
+      setDocuments(mapServerDocs(data.documents))
     }).catch(() => {
       // Thread gone — clear stale id
       setActiveThreadId(null)
       setChat([])
+      setDocuments([])
     })
     return () => { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -406,7 +459,7 @@ export default function App() {
 
       const generatedTitle = buildThreadTitle(text, { chat, documents, docIds })
 
-      // Pick up new thread id if Cortex just created one
+      // Pick up the new thread id if the backend just created one
       if (result?.thread_id && result.thread_id !== activeThreadId) {
         upsertThreadSummary(result.thread_id, generatedTitle)
         setActiveThreadId(result.thread_id)
@@ -441,7 +494,7 @@ export default function App() {
           try {
             await renameThread(result.thread_id, generatedTitle)
           } catch {
-            // Keep the answered turn intact even if Cortex rejects a title patch.
+            // Keep the answered turn intact even if the rename request fails.
           } finally {
             await refreshThreads()
           }
@@ -491,6 +544,7 @@ export default function App() {
     if (!canStartNewChat) return
     setActiveThreadId(null)
     setChat([])
+    setDocuments([])
     setInlineFeedback(null)
   }
 
@@ -499,6 +553,7 @@ export default function App() {
       if (activeThreadId) {
         setActiveThreadId(null)
         setChat([])
+        setDocuments([])
         setInlineFeedback(null)
       }
       return
@@ -508,6 +563,7 @@ export default function App() {
     if (threadCacheRef.current[threadId]) {
       setChat(threadCacheRef.current[threadId])
       setActiveThreadId(threadId)
+      loadThreadDocuments(threadId)
       return
     }
     try {
@@ -520,6 +576,7 @@ export default function App() {
         skipTyping: true,
       }))
       setChat(loaded)
+      setDocuments(mapServerDocs(data?.documents))
       setActiveThreadId(threadId)
     } catch {
       setInlineFeedback({ tone: 'error', content: 'Could not load chat history.' })
@@ -570,9 +627,18 @@ export default function App() {
     startStageProgress(timelineId, UPLOAD_STAGES, UPLOAD_PACE)
 
     try {
-      const ingestResult = await ingest(file, apiKey)
+      const ingestResult = await ingest(file, apiKey, activeThreadId)
       const docId = getDocIdFromIngestResponse(ingestResult)
       if (!docId) throw new Error('Upload response missing document identifier.')
+
+      // A paperclip upload in a brand-new chat makes the server create the thread;
+      // adopt its id so the chat (and its private doc) persist and appear in the sidebar.
+      const newThreadId = ingestResult?.thread_id
+      if (newThreadId && newThreadId !== activeThreadId) {
+        upsertThreadSummary(newThreadId, compactTitle(file.name) || 'New Chat')
+        setActiveThreadId(newThreadId)
+        refreshThreads()
+      }
 
       completeStages(timelineId, {
         chunk_count: ingestResult?.chunk_count ?? null,
@@ -632,6 +698,7 @@ export default function App() {
           onDelete={handleDeleteThread}
           isOpen={isSidebarOpen}
           onClose={() => setIsSidebarOpen(false)}
+          onToggle={() => setIsSidebarOpen((v) => !v)}
           theme={theme}
           onThemeChange={setTheme}
           userId={userId}
@@ -643,6 +710,10 @@ export default function App() {
           onModelChange={setSelectedModel}
           onProviderChange={setProvider}
           onReset={handleReset}
+          resources={resources}
+          resourcesLoading={resourcesLoading}
+          onResourceUpload={handleResourceUpload}
+          onResourceDelete={handleResourceDelete}
         />
         <div className="app-shell-main">
         <Header
@@ -650,8 +721,6 @@ export default function App() {
           byokValidationMessage={byokValidationMessage}
           onApiKeyChange={setApiKey} onModelChange={setSelectedModel}
           onProviderChange={setProvider} onReset={handleReset}
-          isSidebarOpen={isSidebarOpen}
-          onSidebarToggle={() => setIsSidebarOpen((v) => !v)}
         />
         <ChatWindow
           messages={chat}

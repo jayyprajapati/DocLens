@@ -1,20 +1,23 @@
 import { useEffect, useRef, useState } from 'react'
-import { Bot, ChevronDown, Eye, EyeOff, FileSearchCorner, Info, KeyRound, Menu, RefreshCw } from 'lucide-react'
+import { Bot, ChevronDown, Eye, EyeOff, FileSearch, Info, KeyRound, RefreshCw, Settings2 } from 'lucide-react'
 import InfoModal from './InfoModal'
 import { fetchModels } from '../services/api'
 
 const PROVIDER_OPTIONS = [
   { value: 'openai', label: 'OpenAI' },
+  { value: 'anthropic', label: 'Claude (Anthropic)' },
   { value: 'ollama_cloud', label: 'Ollama Cloud' },
 ]
 
 const MODEL_SUGGESTIONS = {
   openai: ['gpt-4o-mini', 'gpt-4o', 'gpt-4.1-mini', 'gpt-4.1', 'o4-mini'],
-  ollama_cloud: ['gpt-oss:120b'],
+  anthropic: ['claude-sonnet-4-6', 'claude-opus-4-8', 'claude-haiku-4-5-20251001'],
+  ollama_cloud: ['gpt-oss:120b', 'gpt-oss:20b'],
 }
 
 const API_KEY_PLACEHOLDER = {
   openai: 'sk-... (OpenAI key)',
+  anthropic: 'sk-ant-... (Anthropic key)',
   ollama_cloud: 'Ollama Cloud key',
   '': 'Select a provider first',
 }
@@ -28,8 +31,6 @@ function Header({
   onModelChange,
   onProviderChange,
   onReset,
-  isSidebarOpen = false,
-  onSidebarToggle,
 }) {
   const [activeModal, setActiveModal] = useState(null)
   const [isApiKeyVisible, setIsApiKeyVisible] = useState(false)
@@ -82,13 +83,11 @@ function Header({
 
   const canFetchModels = provider === 'ollama_cloud' && apiKey.trim().length > 0
 
-  // Shared BYOK form fields rendered in both desktop dropdown and mobile drawer
   const renderByokFields = (idSuffix = '') => (
     <div className="header-controls byok-controls">
-      {/* Provider */}
       <div className="panel-field-group">
         <div className="panel-label-row">
-          <label htmlFor={`provider-select${idSuffix}`} className="field-label field-label-stack">Provider</label>
+          <label htmlFor={`provider-select${idSuffix}`} className="field-label">Provider</label>
           <button
             type="button"
             className="icon-button icon-info"
@@ -118,10 +117,9 @@ function Header({
         </div>
       </div>
 
-      {/* API Key */}
       <div className="panel-field-group">
         <div className="panel-label-row">
-          <label htmlFor={`api-key-input${idSuffix}`} className="field-label field-label-stack">API Key</label>
+          <label htmlFor={`api-key-input${idSuffix}`} className="field-label">API Key</label>
           <button
             type="button"
             className="icon-button icon-info"
@@ -153,11 +151,10 @@ function Header({
         </div>
       </div>
 
-      {/* Model */}
       <div className="panel-field-group">
         <div className="panel-label-row">
-          <label htmlFor={`model-input${idSuffix}`} className="field-label field-label-stack">Model</label>
-          <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+          <label htmlFor={`model-input${idSuffix}`} className="field-label">Model</label>
+          <div className="panel-label-actions">
             {canFetchModels && (
               <button
                 type="button"
@@ -228,26 +225,16 @@ function Header({
   return (
     <>
       <header className="header">
-        {/* Sidebar toggle — always visible, left of title */}
-        <button
-          type="button"
-          className={`sidebar-toggle-btn ${isSidebarOpen ? 'active' : ''}`}
-          onClick={onSidebarToggle}
-          aria-label={isSidebarOpen ? 'Close chat history' : 'Open chat history'}
-          title={isSidebarOpen ? 'Close history' : 'Chat history'}
-        >
-          <Menu size={18} />
-        </button>
-
         <div className="title-wrap">
-          <FileSearchCorner className="title-icon" size={28} aria-hidden="true" />
+          <span className="title-icon" aria-hidden="true">
+            <FileSearch size={18} strokeWidth={2} />
+          </span>
           <div className="title-text-block">
             <h1 className="title">DocLens</h1>
-            <p className="title-subtitle">A cited chat workspace for serious documents.</p>
+            <span className="title-subtitle">Cited document answers</span>
           </div>
         </div>
 
-        {/* Desktop controls */}
         <div className="header-main-controls">
           <div className="header-dropdown" ref={byokDropdownRef}>
             <button
@@ -257,8 +244,9 @@ function Header({
               aria-expanded={openDropdown === 'byok'}
               aria-controls="byok-dropdown-panel"
             >
+              <Settings2 size={15} aria-hidden="true" />
               Settings
-              <ChevronDown size={16} aria-hidden="true" />
+              <ChevronDown size={14} aria-hidden="true" />
             </button>
 
             {openDropdown === 'byok' && (
@@ -270,16 +258,16 @@ function Header({
             )}
           </div>
         </div>
-
       </header>
 
       <InfoModal isOpen={activeModal === 'byok'} onClose={closeModal} title="Provider &amp; API Key">
         <p>DocLens requires your own API key. Select the provider that matches your key:</p>
         <ul>
           <li><strong>OpenAI</strong> — key from <strong>platform.openai.com</strong> (starts with <code>sk-</code>).</li>
+          <li><strong>Claude (Anthropic)</strong> — key from <strong>console.anthropic.com</strong> (starts with <code>sk-ant-</code>).</li>
           <li><strong>Ollama Cloud</strong> — key from <strong>ollama.com</strong>.</li>
         </ul>
-        <p>Your key is stored only in your browser and is never saved to any DocLens server. It is cleared when you reset your session.</p>
+        <p>Your key is stored only in your browser and is sent per request to power your chats — it is never saved to any DocLens or Brain server, and there is no shared fallback key. It is cleared when you reset your session.</p>
       </InfoModal>
 
       <InfoModal isOpen={activeModal === 'model'} onClose={closeModal} title="About Models">

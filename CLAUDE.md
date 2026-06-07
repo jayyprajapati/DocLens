@@ -4,91 +4,122 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-DocLens is a BYOK (Bring Your Own Key) document Q&A application. Users upload PDFs, supply their own OpenAI/Ollama API key, and ask questions answered by a downstream RAG service called Cortex.
+DocLens is a NotebookLM-style, BYOK (Bring Your Own Key) document Q&A app. Users
+upload documents, supply their own OpenAI / Anthropic (Claude) / Ollama Cloud key,
+and ask questions answered with grounded, cited responses.
+
+DocLens delegates **all** RAG/LLM work to **Brain** — a standalone,
+application-agnostic RAG engine (`/Users/jay/Desktop/Projects/Brain`). Brain owns
+extraction, chunking, embeddings, vector search, reranking, and the BYOK LLM call.
+DocLens owns its **own application state** (chat sessions, messages, and the
+global-vs-per-chat document registry) in MongoDB. Brain never sees any DocLens
+state — only vectors keyed by an opaque `namespace` (the user id) and `doc_id`.
+
+> DocLens previously used a different RAG backend that exposed threads/workspaces/
+> credentials endpoints. That is fully removed — Brain has none of those, so don't
+> reintroduce them. Brain is a stateless primitive provider.
 
 Request flow:
 ```
-Browser (React) → DocLens Backend (FastAPI :8001) → Cortex RAG Service (:8000) → OpenAI / Ollama
+Browser (React/Vite :3000)
+      │
+      ▼
+DocLens Backend (FastAPI :8001)  ── owns Mongo state, enforces BYOK
+      │   /v1/extract · /v1/retrieve · /v1/generate · /v1/delete  (Bearer BRAIN_API_KEY)
+      ▼
+Brain (FastAPI :8000) ──► OpenAI / Anthropic / Ollama  (user's BYOK key, no fallback)
+                     └──► Qdrant (collection "doclens", namespace = user id)
 ```
 
-The DocLens backend is a **thin orchestration layer** — it validates requests, scopes by `user_id`, and forwards to Cortex. Cortex owns embeddings, vector search, and LLM calls.
+## Two upload flows (the core product behavior)
+
+1. **Global resources** — the left-panel "Resources" uploader (`POST /resources`).
+   Ingested with `scope="global"`. Queryable in **every** chat for that user.
+2. **Per-chat attachments** — the in-composer paperclip (`POST /ingest`).
+   Ingested with `scope="thread"` tied to a `thread_id`. Queryable **only** in that
+   chat. Uploading in a brand-new chat makes the server create the thread and return
+   its `thread_id`, which the frontend adopts.
+
+At query time, retrieval is scoped to `namespace=user_id` AND
+`doc_ids = (this user's global docs) ∪ (this chat's docs)`, so a chat sees global
+resources + its own attachments, and never another chat's private docs.
 
 ## Commands
 
 ### Backend
 ```bash
-# From repo root
 source .venv/bin/activate
-cd backend
-uvicorn app.main:app --reload --port 8001
-
-# First-time setup
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r backend/requirements.txt
+pip install -r backend/requirements.txt          # first-time
+cd backend && uvicorn app.main:app --reload --port 8001
 ```
+Brain must be running (default `http://localhost:8000`) and MongoDB reachable.
 
 ### Frontend
 ```bash
 cd frontend
-npm install        # first-time setup
-npm run dev        # dev server on :3000
-npm run build      # production build
-npm run lint       # ESLint
-npm run preview    # preview production build
+npm install
+npm run dev      # :3000
+npm run build
 ```
 
-No test suite exists currently.
+No automated test suite yet.
 
-## Architecture
+## Backend architecture (`backend/app/`)
 
-### Backend (`backend/`)
+- `main.py` — FastAPI app, CORS, Mongo index creation on startup (lifespan).
+- `config.py` — env settings: `BRAIN_BASE_URL`, `BRAIN_API_KEY`, `BRAIN_APP_NAME`
+  (default `doclens`), `MONGO_URI`, `MONGO_DB`, `CORS_ALLOWED_ORIGINS`, `ENV`.
+- `auth.py` — `user_id_from_request`: decodes the frontend bearer token's `sub`
+  claim (unsigned dev JWT) → the user id used as Brain's `namespace`.
+- `brain_client.py` — sync httpx client for Brain (`extract_and_ingest`, `retrieve`,
+  `generate`, `delete`, `ping`). All calls carry `app_name` + Bearer key; BYOK `llm`
+  override is forwarded on every generation. Raises `BrainError(status, detail)`.
+- `db.py` — pymongo client + `doclens_threads` / `doclens_messages` /
+  `doclens_documents` collections (+ indexes). DocLens state only.
+- `prompts.py` — the domain prompts: grounded-but-expansive answer system prompt
+  with **clarify-before-assuming** rules, the follow-up contextualizer, and the
+  numbered SOURCES / history prompt builders.
+- `schemas.py` — request models; `VALID_PROVIDERS = {openai, anthropic, ollama_cloud, ollama_local}`.
+- `services/threads.py` — chat-session + message CRUD.
+- `services/documents.py` — registry mapping `doc_id → {user, filename, scope, thread}`;
+  ingest/list/delete; `global_doc_ids` / `thread_doc_ids` / `filename_map`.
+- `services/chat.py` — `run_chat`: resolve/create thread → load recent history →
+  scope docs → (LLM) contextualize follow-up → Brain retrieve → grounded+cited
+  Brain generate (BYOK) → persist turns → return `{answer, citations, thread_id, meta, grounded}`.
+- `api/routes.py` — endpoints (below).
 
-- `app/main.py` — FastAPI app, CORS config, startup hook that launches the background cleanup task
-- `app/api/routes.py` — All HTTP endpoints; handles validation, error mapping, and calls into services
-- `app/services/` — Business logic layer: `ingest_service`, `query_service`, `delete_service`, `document_registry`
-- `services/rag_client.py` — Raw HTTP client for Cortex; all calls attach `app_name="doclens"` and `user_id` scoping
-- `app/config.py` — `CORTEX_BASE_URL` and `ENV` loaded from `backend/.env`
-- `app/data/document_registry.json` — File-based doc metadata store (thread-locked JSON); tracks `doc_id`, `filename`, `uploaded_at`
-- `app/services/cleanup_service.py` — Async background task (runs every 60 min) that deletes documents older than 24 hours via Cortex
+### Endpoints
+`GET /health` · `GET /models?provider=&api_key=` · `POST /chat` ·
+`POST /ingest` (per-chat upload) · `GET /documents?thread_id=` ·
+`POST /delete` · `POST /delete_all` ·
+`POST /resources` · `GET /resources` · `DELETE /resources/{doc_id}` (global) ·
+`GET /threads` · `GET /threads/{id}` · `PATCH /threads/{id}` · `DELETE /threads/{id}`.
 
-Error handling convention: `_handle_upstream_error()` maps Cortex 4xx → 400 and 5xx → 502. Use `_error_response()` for consistent JSON error format.
+BYOK rule: only LLM calls (`/chat`) require provider+api_key+model; there is **no**
+fallback to Brain's own keys. Uploads/retrieval need no key (embeddings are local
+to Brain). Brain 4xx (e.g. bad key) → 400 to the browser; 5xx/unreachable → 502.
 
-### Frontend (`frontend/src/`)
+## Frontend (`frontend/src/`)
 
-- `App.jsx` — Root component; owns all shared state and wires it to children via props
-- `components/Header.jsx` — API settings modal (provider, key, model), theme toggle, session reset
-- `components/ChatWindow.jsx` — Message list + document selection logic
-- `components/InputBar.jsx` — File upload + text input; emits ingest/query events upward
-- `components/MessageBubble.jsx` — Renders messages, sources, timeline stages
-- `services/api.js` — All `fetch()` calls to the backend; returns structured results
+- `App.jsx` — owns shared state; `documents` = active thread's attachments,
+  `resources` = global resources. Per-chat docs load on thread hydrate/select.
+- `components/Header.jsx`, `components/ThreadSidebar.jsx` — BYOK settings
+  (providers: OpenAI, Claude/Anthropic, Ollama Cloud) + global Resources uploader.
+- `components/InputBar.jsx` — composer with paperclip (per-chat upload).
+- `components/MessageBubble.jsx` — renders answers; inline `[n]` markers map to
+  `message.sources[n-1]`; citation shape is `{ index, section, page, text, doc_id, filename, score }`.
+- `services/api.js` — all fetch calls; `services/auth.js` mints the bearer token.
 
-**Message types** in the chat array: `'user'`, `'assistant'`, `'timeline'`, `'system'`, `'doc-select'`. Timeline messages animate upload/query stages with `startStageProgress()` / `completeStages()` / `failStages()`.
+**Component note:** import bare (`./components/Header`) resolves to the `.jsx`.
+Do not recreate empty `.js` siblings — they shadow the real component under Vite.
 
-**Ambiguous query detection**: if the user has >1 uploaded doc and the query matches `\b(this|the)\s+(doc|file|pdf|report)\b`, a `doc-select` message is injected; the chosen doc IDs are sent as `doc_ids` on the real query.
+## Environment
 
-**localStorage keys** (all prefixed `doclens_`): `user_id`, `api_key`, `selected_model`, `provider`, `theme`. Session reset clears all of these and reloads.
+`backend/.env`: `BRAIN_BASE_URL`, `BRAIN_API_KEY`, `BRAIN_APP_NAME=doclens`,
+`MONGO_URI`, `MONGO_DB=doclens`, `CORS_ALLOWED_ORIGINS`, `ENV`.
+`frontend/.env`: `VITE_API_BASE_URL=http://localhost:8001`.
 
-### Environment Configuration
-
-**`backend/.env`**
-```
-CORTEX_BASE_URL=http://localhost:8000
-ENV=development   # set to "production" to disable /docs and /redoc
-```
-
-**`frontend/.env`**
-```
-VITE_API_BASE_URL=http://localhost:8001
-```
-
-### CORS
-
-Configured in `backend/app/main.py`; allows `http://localhost:3000` and the production domain. Update here when adding new origins.
-
-### Supported Providers & Models
-
-- **OpenAI**: `gpt-4o-mini`, `gpt-4o`, `gpt-4.1-mini`, `gpt-4.1`, `o4-mini`
-- **Ollama Cloud**: `gpt-oss:120b` (fallback when Cortex returns no models)
-
-Model lists are fetched from Cortex at runtime via `GET /models` (optionally authenticated with the user's API key).
+## Supported documents & providers
+- Files: **PDF, DOCX, Markdown** (Brain also accepts plain text; legacy `.doc` is rejected).
+  Brain uses pdfplumber for PDFs (renders tables as Markdown) with a pypdf fallback.
+- Providers (BYOK): **OpenAI**, **Anthropic (Claude)**, **Ollama Cloud**.

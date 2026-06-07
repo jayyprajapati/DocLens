@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { motion as Motion } from 'framer-motion'
 import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { Bot, Check, Copy, FileText, Search, UserRound } from 'lucide-react'
 import CitationDrawer from './CitationDrawer'
 
@@ -15,7 +16,9 @@ function superscriptDigit(n) {
 
 function preprocess(text) {
   if (!text) return ''
-  return text.replace(CITATION_RE, (_, inner) => {
+  // Normalize fullwidth/CJK citation brackets some models emit (e.g. 【1】) to ASCII [1].
+  const normalized = text.replace(/【\s*(\d+(?:\s*,\s*\d+)*)\s*】/g, '[$1]')
+  return normalized.replace(CITATION_RE, (_, inner) => {
     return inner.split(',').map(s => {
       const n = s.trim()
       return `[${superscriptDigit(n)}](cit://${n})`
@@ -176,7 +179,7 @@ function AnswerBlock({ answer, sources, retrieveMs, generateMs, streaming = fals
 
   return (
     <div className="tl-answer-body">
-      <ReactMarkdown components={{ a: citLink }}>{preprocess(displayedAnswer)}</ReactMarkdown>
+      <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ a: citLink }}>{preprocess(displayedAnswer)}</ReactMarkdown>
       {isTyping && <span className="typing-cursor" aria-hidden="true" />}
       {activeCitation && (
         <CitationDrawer citation={activeCitation} onClose={() => setActiveCitation(null)} />
@@ -422,7 +425,7 @@ function MessageBubble({ message, onDocSelect }) {
         <div className={`msg-bubble ${isUser ? 'bubble-user' : 'bubble-assistant'}`}>
           {isUser
             ? <p>{displayContent}</p>
-            : <ReactMarkdown components={{ a: citLink }}>{preprocess(displayContent)}</ReactMarkdown>}
+            : <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ a: citLink }}>{preprocess(displayContent)}</ReactMarkdown>}
           {isTyping && <span className="typing-cursor" aria-hidden="true" />}
           {isAssistant && activeCitation && (
             <CitationDrawer citation={activeCitation} onClose={() => setActiveCitation(null)} />

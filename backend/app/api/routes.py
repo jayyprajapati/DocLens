@@ -1,509 +1,283 @@
-import base64
-import json
-import os
-import tempfile
+"""DocLens HTTP API.
+
+A thin orchestration + state layer: validates requests, resolves the user, owns
+chat-session/document state in Mongo, and delegates all RAG/LLM work to Brain.
+BYOK is enforced for anything that calls the LLM (chat) — the user's key is
+required, with no fallback to Brain's own credentials. Uploads need no key
+(embeddings run locally inside Brain).
+"""
+from __future__ import annotations
+
 import time
+from typing import Optional
 
-import requests
-from typing import List, Literal, Optional
+import httpx
+from fastapi import APIRouter, File, Form, Request, UploadFile
+from fastapi.responses import JSONResponse
 
-from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import JSONResponse, StreamingResponse
-from pydantic import BaseModel, Field
-
-from app.config import CORTEX_BASE_URL
-from app.services.delete_service import run_delete, run_delete_all
-from app.services.document_registry import (
-    list_documents,
-    register_document,
-    remove_all_documents,
-    remove_document,
+from .. import brain_client
+from ..auth import user_id_from_request
+from ..schemas import (
+    ChatRequest,
+    DeleteAllRequest,
+    DeleteRequest,
+    ThreadPatchRequest,
+    VALID_PROVIDERS,
 )
-from app.services.ingest_service import run_ingest
-from app.services.query_service import run_query
-from services.rag_client import (
-    chat as rag_chat,
-    delete_thread as rag_delete_thread,
-    get_thread as rag_get_thread,
-    list_threads as rag_list_threads,
-    patch_thread as rag_patch_thread,
-    stream_chat as rag_stream_chat,
-)
-
+from ..services import chat as chat_service
+from ..services import documents as doc_service
+from ..services import threads as thread_service
 
 router = APIRouter()
 
-VALID_PROVIDERS = {"openai", "ollama_cloud"}
+_OPENAI_MODELS = ["gpt-4o-mini", "gpt-4o", "gpt-4.1-mini", "gpt-4.1", "o4-mini"]
+_ANTHROPIC_MODELS = ["claude-sonnet-4-6", "claude-opus-4-8", "claude-haiku-4-5-20251001"]
+_OLLAMA_CLOUD_FALLBACK = ["gpt-oss:120b", "gpt-oss:20b"]
+
+_SUPPORTED_UPLOAD_HINT = "Supported types: PDF, DOCX, Markdown (.md), or plain text."
 
 
-class QueryRequest(BaseModel):
-    query: str
-    user_id: Optional[str] = None
-    api_key: Optional[str] = None
-    model: Optional[str] = None
-    provider: Literal["openai", "ollama_cloud"] = "openai"
-    doc_ids: Optional[List[str]] = None
+# ── helpers ──────────────────────────────────────────────────────────────────
 
 
-class ChatRequest(BaseModel):
-    query: str
-    user_id: Optional[str] = None
-    api_key: Optional[str] = None
-    model: Optional[str] = None
-    provider: Literal["openai", "ollama_cloud"] = "openai"
-    thread_id: Optional[str] = None
-    doc_ids: Optional[List[str]] = None
-
-
-class ThreadPatchRequest(BaseModel):
-    title: Optional[str] = None
-
-
-class DeleteRequest(BaseModel):
-    doc_id: str = Field(min_length=1)
-
-
-class DeleteAllRequest(BaseModel):
-    pass
-
-
-def _decode_b64url(value):
-    padding = "=" * (-len(value) % 4)
-    return base64.urlsafe_b64decode((value + padding).encode("utf-8"))
-
-
-def _user_id_from_request(request: Request, fallback=None):
-    fallback = (fallback or "").strip()
-    auth_header = request.headers.get("Authorization", "")
-    token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
-    if token:
-        try:
-            parts = token.split(".")
-            if len(parts) >= 2:
-                payload = json.loads(_decode_b64url(parts[1]).decode("utf-8"))
-                sub = str(payload.get("sub") or "").strip()
-                if sub:
-                    return sub
-        except Exception:
-            pass
-
-    if fallback:
-        return fallback
-
-    raise HTTPException(status_code=401, detail="Authorization bearer token with sub claim is required")
-
-
-def _llm_options(payload):
-    api_key = (payload.api_key or "").strip()
-    model = (payload.model or "").strip()
-    if not api_key:
-        raise HTTPException(status_code=400, detail="API key is required.")
-    if not model:
-        raise HTTPException(status_code=400, detail="Model is required.")
-    return {
-        "provider": payload.provider,
-        "api_key": api_key,
-        "model": model,
-    }
-
-
-def _extract_doc_id(ingest_result):
-    if not isinstance(ingest_result, dict):
-        return None
-
-    candidates = [
-        ingest_result.get("doc_id"),
-        ingest_result.get("document_id"),
-        ingest_result.get("id"),
-    ]
-
-    nested = ingest_result.get("result")
-    if isinstance(nested, dict):
-        candidates += [nested.get("doc_id"), nested.get("document_id"), nested.get("id")]
-
-    for c in candidates:
-        if isinstance(c, str) and c.strip():
-            return c.strip()
-
-    return None
-
-
-def _safe_duration(value, default_value):
-    try:
-        parsed = float(value)
-    except (TypeError, ValueError):
-        return round(float(default_value), 4)
-    return round(parsed, 4) if parsed >= 0 else round(float(default_value), 4)
-
-
-def _build_meta(raw_meta, elapsed_ms):
-    if not isinstance(raw_meta, dict):
-        raw_meta = {}
-    return {
-        "retrieval_time": _safe_duration(raw_meta.get("retrieval_time"), elapsed_ms),
-        "generation_time": _safe_duration(raw_meta.get("generation_time"), 0),
-    }
-
-
-def _error_response(status_code, error_code, message, extra=None):
-    payload = {"error": error_code, "message": message, "detail": message}
-    if isinstance(extra, dict):
+def _error(status_code: int, code: str, message: str, extra: dict | None = None) -> JSONResponse:
+    payload = {"error": code, "message": message, "detail": message}
+    if extra:
         payload.update(extra)
     return JSONResponse(status_code=status_code, content=payload)
 
 
-def _upstream_detail(exc):
-    if isinstance(exc, requests.HTTPError) and exc.response is not None:
-        return exc.response.text
-    return str(exc)
+def _brain_error(exc: brain_client.BrainError) -> JSONResponse:
+    """Brain 4xx (bad key / bad request) → 400 to the browser; 5xx / unreachable → 502."""
+    if exc.status and 400 <= exc.status < 500:
+        return _error(400, "upstream_client_error", exc.detail, {"upstream_status": exc.status})
+    return _error(502, "upstream_error", exc.detail, {"upstream_status": exc.status})
 
 
-def _handle_upstream_error(exc, action):
-    """
-    Return the right HTTP status to the browser based on what Cortex returned.
-    - Cortex 4xx (bad key, bad provider, bad request) → 400 to browser (client error)
-    - Cortex 5xx or connectivity failure → 502 to browser (gateway error)
-    """
-    if isinstance(exc, requests.HTTPError) and exc.response is not None:
-        upstream_status = exc.response.status_code
-        if 400 <= upstream_status < 500:
-            return _error_response(
-                400,
-                "upstream_client_error",
-                f"{action} failed: check your API key and provider selection.",
-                {"upstream_detail": exc.response.text},
-            )
-    return _error_response(
-        502,
-        "upstream_error",
-        f"{action} failed: upstream service error.",
-        {"upstream_detail": _upstream_detail(exc)},
-    )
+def _require_llm(provider: str, api_key: str, model: str) -> Optional[JSONResponse]:
+    """Validate BYOK fields for an LLM call. Returns an error response or None."""
+    provider = (provider or "").strip()
+    if provider not in VALID_PROVIDERS:
+        return _error(400, "invalid_provider", f"Unsupported provider: {provider or '(none)'}.")
+    if not (api_key or "").strip() and provider != "ollama_local":
+        return _error(400, "byok_required", "An API key is required — DocLens uses your own key.")
+    if not (model or "").strip():
+        return _error(400, "model_required", "Select a model to continue.")
+    return None
 
 
-def _sse_event(event_type, data):
-    return f"event: {event_type}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+# ── health & models ──────────────────────────────────────────────────────────
 
 
-def _latest_thread_id(user_id):
-    data = rag_list_threads(user_id=user_id, app_name="doclens", base_url=CORTEX_BASE_URL, timeout=10)
-    threads = data.get("threads", []) if isinstance(data, dict) else []
-    if not threads:
-        return None
-    return threads[0].get("id")
-
-
-@router.get("/documents")
-def list_documents_endpoint(request: Request, user_id: Optional[str] = None):
-    resolved_user_id = _user_id_from_request(request, user_id)
-    docs = list_documents(resolved_user_id)
-    for d in docs:
-        if not d.get("filename"):
-            d["filename"] = f"doc-{d['doc_id'][:8]}"
-    return {"documents": docs}
-
-
-_OPENAI_MODELS = ["gpt-4o-mini", "gpt-4o", "gpt-4.1-mini", "gpt-4.1", "o4-mini"]
-_OLLAMA_CLOUD_FALLBACK = ["gpt-oss:120b"]
+@router.get("/health")
+def health():
+    return {"status": "ok", "service": "doclens", "brain": brain_client.settings.brain_base_url}
 
 
 @router.get("/models")
-def list_models_endpoint(provider: str, api_key: str = ""):
+def list_models(provider: str, api_key: str = ""):
     if provider == "openai":
         return {"models": _OPENAI_MODELS}
-
+    if provider == "anthropic":
+        return {"models": _ANTHROPIC_MODELS}
     if provider == "ollama_cloud":
-        if not api_key.strip():
+        key = (api_key or "").strip()
+        if not key:
             return {"models": _OLLAMA_CLOUD_FALLBACK}
         try:
-            resp = requests.get(
+            resp = httpx.get(
                 "https://ollama.com/api/tags",
-                headers={"Authorization": f"Bearer {api_key.strip()}"},
+                headers={"Authorization": f"Bearer {key}"},
                 timeout=10,
             )
             resp.raise_for_status()
-            data = resp.json()
-            names = [
-                m.get("name") or m.get("model")
-                for m in data.get("models", [])
-            ]
+            names = [m.get("name") or m.get("model") for m in resp.json().get("models", [])]
             models = sorted(n for n in names if n)
             return {"models": models or _OLLAMA_CLOUD_FALLBACK}
-        except Exception:
+        except Exception:  # noqa: BLE001
             return {"models": _OLLAMA_CLOUD_FALLBACK}
+    if provider == "ollama_local":
+        return {"models": []}
+    return _error(400, "invalid_provider", f"Unknown provider: {provider!r}")
 
-    return _error_response(400, "invalid_provider", f"Unknown provider: {provider!r}")
 
-
-@router.post("/query")
-def query_endpoint(http_request: Request, request: QueryRequest):
-    user_id = _user_id_from_request(http_request, request.user_id)
-    # Auto-scope to the user's only document if they have exactly one
-    user_docs = list_documents(user_id)
-    auto_doc_ids = [user_docs[0]["doc_id"]] if len(user_docs) == 1 else None
-
-    llm = _llm_options(request)
-
-    final_doc_ids = request.doc_ids or auto_doc_ids
-
-    start = time.perf_counter()
-    try:
-        result = run_query(query=request.query, user_id=user_id, llm=llm, doc_ids=final_doc_ids)
-    except requests.HTTPError as exc:
-        return _handle_upstream_error(exc, "Query")
-    except requests.RequestException as exc:
-        return _error_response(502, "upstream_error", "Query failed: could not reach Cortex.",
-                               {"upstream_detail": str(exc)})
-
-    elapsed_ms = (time.perf_counter() - start) * 1000
-    payload = dict(result) if isinstance(result, dict) else {"result": result}
-    payload["meta"] = _build_meta(payload.get("meta"), elapsed_ms)
-    return payload
+# ── chat ─────────────────────────────────────────────────────────────────────
 
 
 @router.post("/chat")
 def chat_endpoint(http_request: Request, request: ChatRequest):
-    """Multi-turn chat with persisted thread history (handled by Cortex)."""
-    user_id = _user_id_from_request(http_request, request.user_id)
-
-    # First turn of a fresh thread: auto-scope to the user's only document.
-    # On subsequent turns Cortex uses the thread's stored doc_ids, so we only
-    # need to provide doc_ids when creating the thread.
-    explicit_doc_ids = request.doc_ids
-    if not request.thread_id and not explicit_doc_ids:
-        user_docs = list_documents(user_id)
-        if len(user_docs) == 1:
-            explicit_doc_ids = [user_docs[0]["doc_id"]]
-
-    llm = _llm_options(request)
+    user_id = user_id_from_request(http_request, request.user_id)
+    err = _require_llm(request.provider, request.api_key or "", request.model or "")
+    if err is not None:
+        return err
 
     start = time.perf_counter()
     try:
-        result = rag_chat(
+        result = chat_service.run_chat(
+            user_id=user_id,
             query=request.query,
-            user_id=user_id,
+            provider=request.provider,
+            api_key=(request.api_key or "").strip(),
+            model=(request.model or "").strip(),
             thread_id=request.thread_id,
-            doc_ids=explicit_doc_ids,
-            llm=llm,
-            base_url=CORTEX_BASE_URL,
+            explicit_doc_ids=request.doc_ids,
         )
-    except requests.HTTPError as exc:
-        return _handle_upstream_error(exc, "Chat")
-    except requests.RequestException as exc:
-        return _error_response(
-            502, "upstream_error",
-            "Chat failed: could not reach Cortex.",
-            {"upstream_detail": str(exc)},
-        )
+    except brain_client.BrainError as exc:
+        return _brain_error(exc)
 
-    elapsed_ms = (time.perf_counter() - start) * 1000
-    payload = dict(result) if isinstance(result, dict) else {"result": result}
-    payload["meta"] = _build_meta(payload.get("meta"), elapsed_ms)
-    return payload
+    result.setdefault("meta", {})["total_ms"] = round((time.perf_counter() - start) * 1000)
+    return result
 
 
-@router.post("/chat/stream")
-def chat_stream_endpoint(http_request: Request, request: ChatRequest):
-    """Proxy Cortex /chat SSE and append DocLens thread metadata at the end."""
-    user_id = _user_id_from_request(http_request, request.user_id)
-
-    explicit_doc_ids = request.doc_ids
-    if not request.thread_id and not explicit_doc_ids:
-        user_docs = list_documents(user_id)
-        if len(user_docs) == 1:
-            explicit_doc_ids = [user_docs[0]["doc_id"]]
-
-    llm = _llm_options(request)
-
-    try:
-        upstream = rag_stream_chat(
-            query=request.query,
-            user_id=user_id,
-            thread_id=request.thread_id,
-            doc_ids=explicit_doc_ids,
-            llm=llm,
-            base_url=CORTEX_BASE_URL,
-        )
-    except requests.HTTPError as exc:
-        return _handle_upstream_error(exc, "Chat")
-    except requests.RequestException as exc:
-        return _error_response(
-            502, "upstream_error",
-            "Chat failed: could not reach Cortex.",
-            {"upstream_detail": str(exc)},
-        )
-
-    def _proxy():
-        try:
-            for chunk in upstream.iter_content(chunk_size=1024):
-                if chunk:
-                    yield chunk
-        finally:
-            upstream.close()
-
-        thread_id = request.thread_id
-        if not thread_id:
-            try:
-                thread_id = _latest_thread_id(user_id)
-            except requests.RequestException:
-                thread_id = None
-
-        if thread_id:
-            yield _sse_event("thread", {"thread_id": thread_id}).encode("utf-8")
-
-    return StreamingResponse(
-        _proxy(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "X-Accel-Buffering": "no",
-        },
-    )
-
-
-@router.get("/threads")
-def list_threads_endpoint(request: Request, user_id: Optional[str] = None):
-    user_id = _user_id_from_request(request, user_id)
-    try:
-        return rag_list_threads(user_id=user_id, app_name="doclens", base_url=CORTEX_BASE_URL)
-    except requests.HTTPError as exc:
-        return _handle_upstream_error(exc, "List threads")
-    except requests.RequestException as exc:
-        return _error_response(
-            502, "upstream_error",
-            "List threads failed: could not reach Cortex.",
-            {"upstream_detail": str(exc)},
-        )
-
-
-@router.get("/threads/{thread_id}")
-def get_thread_endpoint(thread_id: str, request: Request, user_id: Optional[str] = None):
-    user_id = _user_id_from_request(request, user_id)
-    try:
-        return rag_get_thread(thread_id=thread_id, user_id=user_id, base_url=CORTEX_BASE_URL)
-    except requests.HTTPError as exc:
-        return _handle_upstream_error(exc, "Get thread")
-    except requests.RequestException as exc:
-        return _error_response(
-            502, "upstream_error",
-            "Get thread failed: could not reach Cortex.",
-            {"upstream_detail": str(exc)},
-        )
-
-
-@router.delete("/threads/{thread_id}")
-def delete_thread_endpoint(thread_id: str, request: Request, user_id: Optional[str] = None):
-    user_id = _user_id_from_request(request, user_id)
-    try:
-        return rag_delete_thread(thread_id=thread_id, user_id=user_id, base_url=CORTEX_BASE_URL)
-    except requests.HTTPError as exc:
-        return _handle_upstream_error(exc, "Delete thread")
-    except requests.RequestException as exc:
-        return _error_response(
-            502, "upstream_error",
-            "Delete thread failed: could not reach Cortex.",
-            {"upstream_detail": str(exc)},
-        )
-
-
-@router.patch("/threads/{thread_id}")
-def patch_thread_endpoint(thread_id: str, request: ThreadPatchRequest, http_request: Request, user_id: Optional[str] = None):
-    user_id = _user_id_from_request(http_request, user_id)
-    try:
-        return rag_patch_thread(
-            thread_id=thread_id,
-            user_id=user_id,
-            title=request.title,
-            base_url=CORTEX_BASE_URL,
-        )
-    except requests.HTTPError as exc:
-        return _handle_upstream_error(exc, "Update thread")
-    except requests.RequestException as exc:
-        return _error_response(
-            502, "upstream_error",
-            "Update thread failed: could not reach Cortex.",
-            {"upstream_detail": str(exc)},
-        )
+# ── per-chat document upload (paperclip) ─────────────────────────────────────
 
 
 @router.post("/ingest")
-async def ingest_endpoint(
+def ingest_endpoint(
     request: Request,
     file: UploadFile = File(...),
     user_id: Optional[str] = Form(None),
-    api_key: str = Form(""),
+    api_key: str = Form(""),  # accepted but unused — ingestion needs no LLM key
+    thread_id: Optional[str] = Form(None),
 ):
-    user_id = _user_id_from_request(request, user_id)
-    if not api_key.strip():
-        return _error_response(400, "byok_required", "API key is required to upload documents.")
+    resolved_user_id = user_id_from_request(request, user_id)
+    content = file.file.read()
+    if not content:
+        return _error(400, "empty_file", "The uploaded file is empty.")
 
-    temp_path = None
+    # A paperclip upload in a brand-new chat creates the chat so the doc has a home.
+    created_thread = None
+    if not thread_id:
+        created_thread = thread_service.create_thread(resolved_user_id, title=file.filename or "New chat")
+        thread_id = created_thread["id"]
+
     start = time.perf_counter()
-
     try:
-        suffix = os.path.splitext(file.filename or "")[1]
-        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-            temp_path = tmp.name
-            tmp.write(await file.read())
+        doc = doc_service.ingest_document(
+            user_id=resolved_user_id,
+            file_bytes=content,
+            filename=file.filename or "document",
+            content_type=file.content_type or "",
+            scope="thread",
+            thread_id=thread_id,
+        )
+    except brain_client.BrainError as exc:
+        # Roll back an auto-created empty thread so a failed first upload leaves no ghost chat.
+        if created_thread:
+            thread_service.delete_thread(resolved_user_id, thread_id)
+        return _brain_error(exc)
 
-        result = run_ingest(file_path=temp_path, user_id=user_id, app_name="doclens")
+    return {
+        "status": "success",
+        "doc_id": doc["doc_id"],
+        "filename": doc["filename"],
+        "chunk_count": doc["chunk_count"],
+        "thread_id": thread_id,
+        "meta": {"ingest_ms": round((time.perf_counter() - start) * 1000)},
+    }
 
-        doc_id = _extract_doc_id(result)
-        if not doc_id:
-            return _error_response(500, "missing_doc_id", "Ingest response missing doc_id.")
 
-        register_document(user_id=user_id, doc_id=doc_id, filename=file.filename)
-
-        elapsed_ms = (time.perf_counter() - start) * 1000
-        return {
-            "status": "success",
-            "doc_id": doc_id,
-            "meta": _build_meta({}, elapsed_ms),
-        }
-
-    except requests.HTTPError as exc:
-        return _handle_upstream_error(exc, "Ingest")
-    except requests.RequestException as exc:
-        return _error_response(502, "upstream_error", "Ingest failed: could not reach Cortex.",
-                               {"upstream_detail": str(exc)})
-    finally:
-        await file.close()
-        if temp_path and os.path.exists(temp_path):
-            os.remove(temp_path)
+@router.get("/documents")
+def list_documents_endpoint(request: Request, user_id: Optional[str] = None, thread_id: Optional[str] = None):
+    resolved_user_id = user_id_from_request(request, user_id)
+    if thread_id:
+        docs = doc_service.list_documents(resolved_user_id, thread_id=thread_id)
+    else:
+        # No thread context (a draft chat) has no attachments yet.
+        docs = []
+    return {"documents": docs}
 
 
 @router.post("/delete")
 def delete_endpoint(http_request: Request, request: DeleteRequest):
-    user_id = _user_id_from_request(http_request)
-    start = time.perf_counter()
-    try:
-        result = run_delete(user_id=user_id, doc_id=request.doc_id, app_name="doclens")
-    except requests.HTTPError as exc:
-        # Document no longer exists in the vector store — clean up registry anyway
-        if exc.response is not None and exc.response.status_code == 404:
-            remove_document(user_id=user_id, doc_id=request.doc_id)
-            elapsed_ms = (time.perf_counter() - start) * 1000
-            return {"status": "success", "result": {"deleted_points": 0}, "meta": _build_meta({}, elapsed_ms)}
-        return _handle_upstream_error(exc, "Delete")
-    except requests.RequestException as exc:
-        return _error_response(502, "upstream_error", "Delete failed: could not reach Cortex.",
-                               {"upstream_detail": str(exc)})
-    remove_document(user_id=user_id, doc_id=request.doc_id)
-    elapsed_ms = (time.perf_counter() - start) * 1000
-    return {"status": "success", "result": result, "meta": _build_meta({}, elapsed_ms)}
+    user_id = user_id_from_request(http_request)
+    removed = doc_service.delete_document(user_id, request.doc_id)
+    return {"status": "success", "result": {"deleted": 1 if removed else 0}}
 
 
 @router.post("/delete_all")
 def delete_all_endpoint(http_request: Request, _request: DeleteAllRequest):
-    user_id = _user_id_from_request(http_request)
-    start = time.perf_counter()
+    user_id = user_id_from_request(http_request)
+    # Wipe vectors + registry + all chat sessions/messages for a clean reset.
+    count = doc_service.delete_all(user_id)
+    from .. import db
+
+    db.threads().delete_many({"user_id": user_id})
+    db.messages().delete_many({"user_id": user_id})
+    return {"status": "success", "result": {"deleted_documents": count}}
+
+
+# ── global resources (left panel) ────────────────────────────────────────────
+
+
+@router.post("/resources")
+def upload_resource(request: Request, file: UploadFile = File(...), user_id: Optional[str] = Form(None)):
+    resolved_user_id = user_id_from_request(request, user_id)
+    content = file.file.read()
+    if not content:
+        return _error(400, "empty_file", "The uploaded file is empty.")
     try:
-        result = run_delete_all(user_id=user_id, app_name="doclens")
-        remove_all_documents(user_id=user_id)
-        elapsed_ms = (time.perf_counter() - start) * 1000
-        return {"status": "success", "result": result, "meta": _build_meta({}, elapsed_ms)}
-    except requests.HTTPError as exc:
-        return _handle_upstream_error(exc, "Delete all")
-    except requests.RequestException as exc:
-        return _error_response(502, "upstream_error", "Delete all failed: could not reach Cortex.",
-                               {"upstream_detail": str(exc)})
+        doc = doc_service.ingest_document(
+            user_id=resolved_user_id,
+            file_bytes=content,
+            filename=file.filename or "document",
+            content_type=file.content_type or "",
+            scope="global",
+        )
+    except brain_client.BrainError as exc:
+        return _brain_error(exc)
+    return {"status": "ok", "doc_id": doc["doc_id"], "filename": doc["filename"], "chunk_count": doc["chunk_count"]}
+
+
+@router.get("/resources")
+def list_resources(request: Request, user_id: Optional[str] = None):
+    resolved_user_id = user_id_from_request(request, user_id)
+    return {"documents": doc_service.list_documents(resolved_user_id, scope="global")}
+
+
+@router.delete("/resources/{doc_id}")
+def delete_resource(doc_id: str, request: Request, user_id: Optional[str] = None):
+    resolved_user_id = user_id_from_request(request, user_id)
+    doc_service.delete_document(resolved_user_id, doc_id)
+    return {"status": "deleted"}
+
+
+# ── chat sessions (threads) ──────────────────────────────────────────────────
+
+
+@router.get("/threads")
+def list_threads_endpoint(request: Request, user_id: Optional[str] = None):
+    resolved_user_id = user_id_from_request(request, user_id)
+    return {"threads": thread_service.list_threads(resolved_user_id)}
+
+
+@router.get("/threads/{thread_id}")
+def get_thread_endpoint(thread_id: str, request: Request, user_id: Optional[str] = None):
+    resolved_user_id = user_id_from_request(request, user_id)
+    thread = thread_service.get_thread_raw(resolved_user_id, thread_id)
+    if not thread:
+        return _error(404, "not_found", "Chat not found.")
+    return {
+        "id": thread["_id"],
+        "title": thread.get("title"),
+        "messages": thread_service.thread_messages(resolved_user_id, thread_id),
+        "documents": doc_service.list_documents(resolved_user_id, thread_id=thread_id),
+    }
+
+
+@router.patch("/threads/{thread_id}")
+def patch_thread_endpoint(thread_id: str, request: ThreadPatchRequest, http_request: Request, user_id: Optional[str] = None):
+    resolved_user_id = user_id_from_request(http_request, user_id)
+    updated = thread_service.rename_thread(resolved_user_id, thread_id, request.title or "")
+    if not updated:
+        return _error(404, "not_found", "Chat not found.")
+    return updated
+
+
+@router.delete("/threads/{thread_id}")
+def delete_thread_endpoint(thread_id: str, request: Request, user_id: Optional[str] = None):
+    resolved_user_id = user_id_from_request(request, user_id)
+    # Remove this chat's private documents (and their vectors), then the chat itself.
+    doc_service.delete_thread_documents(resolved_user_id, thread_id)
+    thread_service.delete_thread(resolved_user_id, thread_id)
+    return {"status": "deleted"}
