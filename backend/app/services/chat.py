@@ -20,6 +20,7 @@ from ..prompts import (
     CONTEXTUALIZE_SYSTEM,
     NO_DOCS_REPLY,
     build_user_prompt,
+    clean_answer_text,
 )
 from . import documents, threads
 
@@ -133,7 +134,7 @@ def run_chat(
         temperature=settings.answer_temperature,
     )
     generate_ms = round((time.perf_counter() - t1) * 1000)
-    answer = (out.get("text") or "").strip() or "I couldn't generate a response. Please try again."
+    answer = clean_answer_text(out.get("text") or "") or "I couldn't generate a response. Please try again."
 
     citations = _citations(chunks, filename_for)
     threads.add_message(thread_id, user_id, "assistant", answer, citations)
