@@ -824,6 +824,48 @@ button {
   padding: 0;
 }
 
+.bubble-assistant table,
+.tl-answer-body table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 14px 0;
+  font-size: 0.93em;
+}
+
+.bubble-assistant th,
+.tl-answer-body th {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: 7px 12px;
+  text-align: left;
+  font-weight: 650;
+  color: var(--text);
+}
+
+.bubble-assistant td,
+.tl-answer-body td {
+  border: 1px solid var(--border);
+  padding: 6px 12px;
+  color: var(--text2);
+  vertical-align: top;
+}
+
+.bubble-assistant tr:nth-child(even),
+.tl-answer-body tr:nth-child(even) {
+  background: var(--surface-quiet);
+}
+
+.bubble-assistant blockquote,
+.tl-answer-body blockquote {
+  margin: 12px 0;
+  padding: 8px 14px;
+  border-left: 3px solid var(--accent-text);
+  background: var(--surface-quiet);
+  color: var(--text2);
+  font-style: italic;
+  border-radius: 0 var(--radius) var(--radius) 0;
+}
+
 .msg-copy {
   border: 0;
   background: transparent;

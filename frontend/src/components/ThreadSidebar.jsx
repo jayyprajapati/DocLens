@@ -7,16 +7,19 @@ const PORTFOLIO_URL = 'https://github.com/jayyprajapati'
 
 const PROVIDER_OPTIONS = [
   { value: 'openai', label: 'OpenAI' },
+  { value: 'anthropic', label: 'Claude (Anthropic)' },
   { value: 'ollama_cloud', label: 'Ollama Cloud' },
 ]
 
 const MODEL_SUGGESTIONS = {
   openai: ['gpt-4o-mini', 'gpt-4o', 'gpt-4.1-mini', 'gpt-4.1', 'o4-mini'],
-  ollama_cloud: ['gpt-oss:120b'],
+  anthropic: ['claude-sonnet-4-6', 'claude-opus-4-8', 'claude-haiku-4-5-20251001'],
+  ollama_cloud: ['gpt-oss:120b', 'gpt-oss:20b'],
 }
 
 const API_KEY_PLACEHOLDER = {
   openai: 'sk-... (OpenAI key)',
+  anthropic: 'sk-ant-... (Anthropic key)',
   ollama_cloud: 'Ollama Cloud key',
   '': 'Select a provider first',
 }
@@ -177,7 +180,7 @@ export default function ThreadSidebar({
                   className="resource-upload-input"
                   onChange={handleResourceFileChange}
                   disabled={resourcesLoading}
-                  accept=".pdf,.doc,.docx,.md,.txt"
+                  accept=".pdf,.docx,.md,.markdown"
                 />
               </label>
             </div>

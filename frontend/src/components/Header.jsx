@@ -5,16 +5,19 @@ import { fetchModels } from '../services/api'
 
 const PROVIDER_OPTIONS = [
   { value: 'openai', label: 'OpenAI' },
+  { value: 'anthropic', label: 'Claude (Anthropic)' },
   { value: 'ollama_cloud', label: 'Ollama Cloud' },
 ]
 
 const MODEL_SUGGESTIONS = {
   openai: ['gpt-4o-mini', 'gpt-4o', 'gpt-4.1-mini', 'gpt-4.1', 'o4-mini'],
-  ollama_cloud: ['gpt-oss:120b'],
+  anthropic: ['claude-sonnet-4-6', 'claude-opus-4-8', 'claude-haiku-4-5-20251001'],
+  ollama_cloud: ['gpt-oss:120b', 'gpt-oss:20b'],
 }
 
 const API_KEY_PLACEHOLDER = {
   openai: 'sk-... (OpenAI key)',
+  anthropic: 'sk-ant-... (Anthropic key)',
   ollama_cloud: 'Ollama Cloud key',
   '': 'Select a provider first',
 }
@@ -277,9 +280,10 @@ function Header({
         <p>DocLens requires your own API key. Select the provider that matches your key:</p>
         <ul>
           <li><strong>OpenAI</strong> — key from <strong>platform.openai.com</strong> (starts with <code>sk-</code>).</li>
+          <li><strong>Claude (Anthropic)</strong> — key from <strong>console.anthropic.com</strong> (starts with <code>sk-ant-</code>).</li>
           <li><strong>Ollama Cloud</strong> — key from <strong>ollama.com</strong>.</li>
         </ul>
-        <p>Your key is stored only in your browser and is never saved to any DocLens server. It is cleared when you reset your session.</p>
+        <p>Your key is stored only in your browser and is sent per request to power your chats — it is never saved to any DocLens or Brain server, and there is no shared fallback key. It is cleared when you reset your session.</p>
       </InfoModal>
 
       <InfoModal isOpen={activeModal === 'model'} onClose={closeModal} title="About Models">

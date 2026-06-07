@@ -112,6 +112,19 @@ function getDocumentLabel(filename) {
   return clean || 'document'
 }
 
+// Map server document rows → the shape the composer/attachment UI expects.
+function mapServerDocs(serverDocs) {
+  return (serverDocs || [])
+    .filter((d) => d && d.doc_id)
+    .map((d) => ({
+      id: uuidv4(),
+      doc_id: d.doc_id,
+      name: d.filename || `doc-${String(d.doc_id).slice(0, 8)}`,
+      status: 'uploaded',
+      ...getDocumentTypeMeta(d.filename || ''),
+    }))
+}
+
 function getLatestUploadedFilename(messages) {
   for (let i = messages.length - 1; i >= 0; i--) {
     const message = messages[i]
@@ -257,19 +270,17 @@ export default function App() {
     else localStorage.removeItem(STORAGE_KEYS.activeThreadId)
   }, [activeThreadId])
 
-  // Load persisted documents on mount
-  useEffect(() => {
-    getDocuments().then((data) => {
-      const docs = (data?.documents || []).map((d) => ({
-        id: uuidv4(),
-        doc_id: d.doc_id,
-        name: d.filename || `doc-${d.doc_id.slice(0, 8)}`,
-        status: 'uploaded',
-        ...getDocumentTypeMeta(d.filename || ''),
-      }))
-      if (docs.length) setDocuments(docs)
-    }).catch(() => {})
-  }, [userId])
+  // Per-chat attachments are loaded per active thread (see hydrate/select handlers),
+  // not globally — a thread's documents are private to that chat.
+  const loadThreadDocuments = async (threadId) => {
+    if (!threadId) { setDocuments([]); return }
+    try {
+      const data = await getDocuments(threadId)
+      setDocuments(mapServerDocs(data?.documents))
+    } catch {
+      setDocuments([])
+    }
+  }
 
   // Load threads list on mount
   const refreshThreads = async () => {
@@ -332,10 +343,12 @@ export default function App() {
         skipTyping: true,
       }))
       setChat(loaded)
+      setDocuments(mapServerDocs(data.documents))
     }).catch(() => {
       // Thread gone — clear stale id
       setActiveThreadId(null)
       setChat([])
+      setDocuments([])
     })
     return () => { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -446,7 +459,7 @@ export default function App() {
 
       const generatedTitle = buildThreadTitle(text, { chat, documents, docIds })
 
-      // Pick up new thread id if Cortex just created one
+      // Pick up the new thread id if the backend just created one
       if (result?.thread_id && result.thread_id !== activeThreadId) {
         upsertThreadSummary(result.thread_id, generatedTitle)
         setActiveThreadId(result.thread_id)
@@ -481,7 +494,7 @@ export default function App() {
           try {
             await renameThread(result.thread_id, generatedTitle)
           } catch {
-            // Keep the answered turn intact even if Cortex rejects a title patch.
+            // Keep the answered turn intact even if the rename request fails.
           } finally {
             await refreshThreads()
           }
@@ -531,6 +544,7 @@ export default function App() {
     if (!canStartNewChat) return
     setActiveThreadId(null)
     setChat([])
+    setDocuments([])
     setInlineFeedback(null)
   }
 
@@ -539,6 +553,7 @@ export default function App() {
       if (activeThreadId) {
         setActiveThreadId(null)
         setChat([])
+        setDocuments([])
         setInlineFeedback(null)
       }
       return
@@ -548,6 +563,7 @@ export default function App() {
     if (threadCacheRef.current[threadId]) {
       setChat(threadCacheRef.current[threadId])
       setActiveThreadId(threadId)
+      loadThreadDocuments(threadId)
       return
     }
     try {
@@ -560,6 +576,7 @@ export default function App() {
         skipTyping: true,
       }))
       setChat(loaded)
+      setDocuments(mapServerDocs(data?.documents))
       setActiveThreadId(threadId)
     } catch {
       setInlineFeedback({ tone: 'error', content: 'Could not load chat history.' })
@@ -613,6 +630,15 @@ export default function App() {
       const ingestResult = await ingest(file, apiKey, activeThreadId)
       const docId = getDocIdFromIngestResponse(ingestResult)
       if (!docId) throw new Error('Upload response missing document identifier.')
+
+      // A paperclip upload in a brand-new chat makes the server create the thread;
+      // adopt its id so the chat (and its private doc) persist and appear in the sidebar.
+      const newThreadId = ingestResult?.thread_id
+      if (newThreadId && newThreadId !== activeThreadId) {
+        upsertThreadSummary(newThreadId, compactTitle(file.name) || 'New Chat')
+        setActiveThreadId(newThreadId)
+        refreshThreads()
+      }
 
       completeStages(timelineId, {
         chunk_count: ingestResult?.chunk_count ?? null,
