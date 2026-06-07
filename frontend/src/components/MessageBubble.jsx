@@ -14,10 +14,22 @@ function superscriptDigit(n) {
   return String(n).split('').map(c => map[c] || c).join('')
 }
 
+function normalizeModelFormatting(text) {
+  return text
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<li(?:\s[^>]*)?>/gi, '- ')
+    .replace(/<\/li\s*>/gi, '\n')
+    .replace(/<\/(?:p|div|ul|ol|section|article)\s*>/gi, '\n\n')
+    .replace(/<\/?(?:p|div|ul|ol|section|article|strong|b|em|i|span)(?:\s[^>]*)?>/gi, '')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+}
+
 function preprocess(text) {
   if (!text) return ''
+  const cleaned = normalizeModelFormatting(text)
   // Normalize fullwidth/CJK citation brackets some models emit (e.g. 【1】) to ASCII [1].
-  const normalized = text.replace(/【\s*(\d+(?:\s*,\s*\d+)*)\s*】/g, '[$1]')
+  const normalized = cleaned.replace(/【\s*(\d+(?:\s*,\s*\d+)*)\s*】/g, '[$1]')
   return normalized.replace(CITATION_RE, (_, inner) => {
     return inner.split(',').map(s => {
       const n = s.trim()
