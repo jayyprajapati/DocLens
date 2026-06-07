@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Bot, ChevronDown, Eye, EyeOff, FileSearchCorner, Info, KeyRound, Menu, RefreshCw } from 'lucide-react'
+import { Bot, ChevronDown, Eye, EyeOff, FileSearch, Info, KeyRound, RefreshCw, Settings2 } from 'lucide-react'
 import InfoModal from './InfoModal'
 import { fetchModels } from '../services/api'
 
@@ -31,8 +31,6 @@ function Header({
   onModelChange,
   onProviderChange,
   onReset,
-  isSidebarOpen = false,
-  onSidebarToggle,
 }) {
   const [activeModal, setActiveModal] = useState(null)
   const [isApiKeyVisible, setIsApiKeyVisible] = useState(false)
@@ -85,13 +83,11 @@ function Header({
 
   const canFetchModels = provider === 'ollama_cloud' && apiKey.trim().length > 0
 
-  // Shared BYOK form fields rendered in both desktop dropdown and mobile drawer
   const renderByokFields = (idSuffix = '') => (
     <div className="header-controls byok-controls">
-      {/* Provider */}
       <div className="panel-field-group">
         <div className="panel-label-row">
-          <label htmlFor={`provider-select${idSuffix}`} className="field-label field-label-stack">Provider</label>
+          <label htmlFor={`provider-select${idSuffix}`} className="field-label">Provider</label>
           <button
             type="button"
             className="icon-button icon-info"
@@ -121,10 +117,9 @@ function Header({
         </div>
       </div>
 
-      {/* API Key */}
       <div className="panel-field-group">
         <div className="panel-label-row">
-          <label htmlFor={`api-key-input${idSuffix}`} className="field-label field-label-stack">API Key</label>
+          <label htmlFor={`api-key-input${idSuffix}`} className="field-label">API Key</label>
           <button
             type="button"
             className="icon-button icon-info"
@@ -156,11 +151,10 @@ function Header({
         </div>
       </div>
 
-      {/* Model */}
       <div className="panel-field-group">
         <div className="panel-label-row">
-          <label htmlFor={`model-input${idSuffix}`} className="field-label field-label-stack">Model</label>
-          <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+          <label htmlFor={`model-input${idSuffix}`} className="field-label">Model</label>
+          <div className="panel-label-actions">
             {canFetchModels && (
               <button
                 type="button"
@@ -231,26 +225,16 @@ function Header({
   return (
     <>
       <header className="header">
-        {/* Sidebar toggle — always visible, left of title */}
-        <button
-          type="button"
-          className={`sidebar-toggle-btn ${isSidebarOpen ? 'active' : ''}`}
-          onClick={onSidebarToggle}
-          aria-label={isSidebarOpen ? 'Close chat history' : 'Open chat history'}
-          title={isSidebarOpen ? 'Close history' : 'Chat history'}
-        >
-          <Menu size={18} />
-        </button>
-
         <div className="title-wrap">
-          <FileSearchCorner className="title-icon" size={28} aria-hidden="true" />
+          <span className="title-icon" aria-hidden="true">
+            <FileSearch size={18} strokeWidth={2} />
+          </span>
           <div className="title-text-block">
             <h1 className="title">DocLens</h1>
-            <p className="title-subtitle">A cited chat workspace for serious documents.</p>
+            <span className="title-subtitle">Cited document answers</span>
           </div>
         </div>
 
-        {/* Desktop controls */}
         <div className="header-main-controls">
           <div className="header-dropdown" ref={byokDropdownRef}>
             <button
@@ -260,8 +244,9 @@ function Header({
               aria-expanded={openDropdown === 'byok'}
               aria-controls="byok-dropdown-panel"
             >
+              <Settings2 size={15} aria-hidden="true" />
               Settings
-              <ChevronDown size={16} aria-hidden="true" />
+              <ChevronDown size={14} aria-hidden="true" />
             </button>
 
             {openDropdown === 'byok' && (
@@ -273,7 +258,6 @@ function Header({
             )}
           </div>
         </div>
-
       </header>
 
       <InfoModal isOpen={activeModal === 'byok'} onClose={closeModal} title="Provider &amp; API Key">

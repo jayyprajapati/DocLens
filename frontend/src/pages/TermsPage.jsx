@@ -1,4 +1,4 @@
-import { AlertTriangle, ArrowLeft, Gauge, Handshake, RefreshCcw, ShieldAlert } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, Gauge, KeyRound, ShieldAlert } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
 function TermsPage() {
@@ -6,79 +6,101 @@ function TermsPage() {
     <div className="legal-page">
       <div className="legal-shell">
         <header className="legal-header">
-          <h1>Terms of Use</h1>
-          <p>
-            These terms govern use of the DocLens interface, backend API gateway, and document Q&A workflows.
+          <div className="legal-header-topline">
+            <p className="legal-kicker">Terms of use</p>
+            <Link className="legal-back-link" to="/">
+              <ArrowLeft size={16} aria-hidden="true" />
+              <span>Back to DocLens</span>
+            </Link>
+          </div>
+          <h1>
+            <span className="legal-title-line">Use the evidence.</span>
+            <span className="legal-title-highlight">Keep your judgment.</span>
+          </h1>
+          <p className="legal-intro">
+            These terms set the practical boundaries for using DocLens, including usage limits,
+            provider responsibilities, answer verification, and fair use.
           </p>
-          <p className="legal-meta">Last updated: March 2026</p>
+          <p className="legal-meta">Last updated · March 2026</p>
         </header>
 
-        <div className="legal-back-row">
-          <Link className="legal-back-link" to="/">
-            <ArrowLeft size={16} aria-hidden="true" />
-            <span>Go Back to DocLens</span>
-          </Link>
+        <div className="legal-summary" aria-label="Terms summary">
+          <div className="legal-summary-item">
+            <span className="legal-summary-icon"><AlertTriangle size={18} aria-hidden="true" /></span>
+            <div className="legal-summary-copy">
+              <span className="legal-summary-value">Cited, not guaranteed</span>
+              <span className="legal-summary-label">Grounded answers still require your review.</span>
+            </div>
+          </div>
+          <div className="legal-summary-item">
+            <span className="legal-summary-icon"><KeyRound size={18} aria-hidden="true" /></span>
+            <div className="legal-summary-copy">
+              <span className="legal-summary-value">Your provider, your bill</span>
+              <span className="legal-summary-label">BYOK usage follows your provider account and limits.</span>
+            </div>
+          </div>
+          <div className="legal-summary-item">
+            <span className="legal-summary-icon"><ShieldAlert size={18} aria-hidden="true" /></span>
+            <div className="legal-summary-copy">
+              <span className="legal-summary-value">Use it fairly</span>
+              <span className="legal-summary-label">Responsible use keeps the workspace reliable.</span>
+            </div>
+          </div>
         </div>
 
         <section className="legal-section">
-          <h2><Gauge size={18} aria-hidden="true" /> Usage Limits</h2>
-          <p>
-            Usage limits are enforced by product policy and surfaced in the Usage panel.
-          </p>
+          <div className="legal-section-heading">
+            <span className="legal-section-index">01</span>
+            <span className="legal-section-icon"><Gauge size={18} aria-hidden="true" /></span>
+            <h2>Usage limits</h2>
+          </div>
+          <p>Product limits keep the service reliable and may change over time.</p>
           <ul>
             <li>Free mode: up to 1 document and 2 queries.</li>
             <li>BYOK mode: up to 5 documents and unlimited queries.</li>
-            <li>Limits can change as product policy evolves.</li>
+            <li>Current limits are surfaced in the product experience.</li>
           </ul>
         </section>
 
         <section className="legal-section">
-          <h2><ShieldAlert size={18} aria-hidden="true" /> BYOK Responsibility</h2>
-          <p>
-            When BYOK is enabled, you are responsible for your key management, account billing, and model selection.
-          </p>
+          <div className="legal-section-heading">
+            <span className="legal-section-index">02</span>
+            <span className="legal-section-icon"><KeyRound size={18} aria-hidden="true" /></span>
+            <h2>Your API key</h2>
+          </div>
+          <p>You are responsible for provider access, billing, and protecting your credentials.</p>
           <ul>
             <li>Use only API keys you are authorized to use.</li>
-            <li>Do not share exposed keys in screenshots, logs, or public repositories.</li>
-            <li>Provider-side billing, quotas, and policy compliance remain your responsibility.</li>
+            <li>Never expose keys in screenshots or repositories.</li>
+            <li>Provider quotas, policies, and charges remain your responsibility.</li>
           </ul>
         </section>
 
         <section className="legal-section">
-          <h2><AlertTriangle size={18} aria-hidden="true" /> No Guarantees</h2>
-          <p>
-            DocLens provides AI-assisted outputs and retrieval references, but responses may still contain
-            inaccuracies, omissions, or outdated information.
-          </p>
+          <div className="legal-section-heading">
+            <span className="legal-section-index">03</span>
+            <span className="legal-section-icon"><AlertTriangle size={18} aria-hidden="true" /></span>
+            <h2>No guarantees</h2>
+          </div>
+          <p>AI-generated answers and citations can still be incomplete or incorrect.</p>
           <ul>
-            <li>Always validate important legal, medical, financial, or operational decisions independently.</li>
-            <li>Source grounding improves reliability but does not guarantee correctness.</li>
-            <li>Service availability and response quality may vary with upstream provider behavior.</li>
+            <li>Verify important decisions independently.</li>
+            <li>Availability depends on upstream providers.</li>
+            <li>Source grounding improves traceability, not certainty.</li>
           </ul>
         </section>
 
         <section className="legal-section">
-          <h2><Handshake size={18} aria-hidden="true" /> Fair Usage</h2>
-          <p>
-            You agree not to abuse or disrupt DocLens, its backend endpoints, or integrated infrastructure.
-          </p>
+          <div className="legal-section-heading">
+            <span className="legal-section-index">04</span>
+            <span className="legal-section-icon"><ShieldAlert size={18} aria-hidden="true" /></span>
+            <h2>Fair usage</h2>
+          </div>
+          <p>Use DocLens lawfully and do not disrupt the service or bypass its controls.</p>
           <ul>
-            <li>Do not attempt to bypass usage limits, safety constraints, or deletion policies.</li>
-            <li>Do not upload unlawful or malicious content intended to compromise systems.</li>
-            <li>Do not reverse engineer or misuse service internals beyond documented behavior.</li>
-          </ul>
-        </section>
-
-        <section className="legal-section">
-          <h2><RefreshCcw size={18} aria-hidden="true" /> Changes to Service</h2>
-          <p>
-            DocLens is actively developed. Features, API routes, model defaults, and usage policies may be
-            updated without prior notice to support quality, security, and roadmap changes.
-          </p>
-          <ul>
-            <li>Current backend endpoint set includes query, ingest, generate, delete, and delete-all flows.</li>
-            <li>Configuration may depend on environment variables such as base URL and default model settings.</li>
-            <li>Continued use after updates constitutes acceptance of revised terms.</li>
+            <li>Do not upload unlawful or malicious content.</li>
+            <li>Do not bypass limits, deletion rules, or safety controls.</li>
+            <li>Continued use accepts future service updates.</li>
           </ul>
         </section>
       </div>

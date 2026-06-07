@@ -698,6 +698,7 @@ export default function App() {
           onDelete={handleDeleteThread}
           isOpen={isSidebarOpen}
           onClose={() => setIsSidebarOpen(false)}
+          onToggle={() => setIsSidebarOpen((v) => !v)}
           theme={theme}
           onThemeChange={setTheme}
           userId={userId}
@@ -720,8 +721,6 @@ export default function App() {
           byokValidationMessage={byokValidationMessage}
           onApiKeyChange={setApiKey} onModelChange={setSelectedModel}
           onProviderChange={setProvider} onReset={handleReset}
-          isSidebarOpen={isSidebarOpen}
-          onSidebarToggle={() => setIsSidebarOpen((v) => !v)}
         />
         <ChatWindow
           messages={chat}
