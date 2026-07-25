@@ -1,0 +1,43 @@
+# DocLens backend — a PROJECT stack. Lives at /srv/doclens on the server.
+#
+# It relies on the shared infra stack (/srv/infra) being up FIRST: it uses the shared `mongo` (reached
+# over the internal `data` network) and reaches Brain in-cluster at http://brain-backend:8000. It is
+# exposed to the internet ONLY through the shared `caddy` (reached over the `web` network). No ports
+# are published here — Caddy terminates TLS and proxies doclens-api.jayprajapati.dev -> doclens-backend:8001.
+#
+# The image is built in CI (GitHub Actions -> GHCR), NOT on the server. The server only pulls:
+#   cd /srv/doclens
+#   docker login ghcr.io -u <github-user>        # once, PAT with read:packages
+#   docker compose pull
+#   docker compose up -d
+#   docker compose logs -f backend
+#
+# Secrets are read from ./backend.env (NOT committed — see backend.env.example).
+name: doclens
+
+services:
+  backend:
+    image: ghcr.io/jayyprajapati/doclens-backend:latest
+    container_name: doclens-backend
+    env_file:
+      - ./backend.env
+    restart: unless-stopped
+    networks:
+      - web # so the shared caddy can reach it (doclens-backend:8001)
+      - data # so it can reach the shared mongo + the brain-backend container
+    healthcheck:
+      # slim image has no wget/curl — probe /health with Python's stdlib.
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+# Both networks are created by the shared infra stack (/srv/infra); we only join them.
+networks:
+  web:
+    external: true
+    name: web
+  data:
+    external: true
+    name: data

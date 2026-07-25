@@ -1,0 +1,35 @@
+name: Deploy Backend
+
+# Pulls the latest DocLens backend image on the server and restarts the container.
+#
+# Manual by default: GitHub → Actions → "Deploy Backend" → Run workflow. To deploy automatically after
+# every image build, uncomment the `workflow_run` trigger + the `if` guard below.
+#
+# Required repo secrets (Settings → Secrets and variables → Actions):
+#   DEPLOY_HOST     the server's public IP or hostname
+#   DEPLOY_USER     deploy
+#   DEPLOY_SSH_KEY  a PRIVATE key whose public half is in /home/deploy/.ssh/authorized_keys on the server
+#                   (generate a dedicated one: ssh-keygen -t ed25519 -f deploy_ci -N "" )
+on:
+  workflow_dispatch: {}
+  # workflow_run:
+  #   workflows: ["Publish Backend Image"]
+  #   types: [completed]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    # if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    steps:
+      - name: Pull + restart on the server
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script: |
+            set -e
+            cd /srv/doclens
+            docker compose pull
+            docker compose up -d
+            docker compose ps

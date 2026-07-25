@@ -33,6 +33,8 @@ ENV/
 .env
 .env.*
 !.env.example
+# Server-side project env (real secrets; the .example is committed)
+backend.env
 
 # Uvicorn / server logs
 *.log
