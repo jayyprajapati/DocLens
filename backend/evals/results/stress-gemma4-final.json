@@ -1,0 +1,388 @@
+{
+ "model": "gemma4:31b",
+ "uploads": [
+  {
+   "file": "soil_moisture_paper.pdf",
+   "kb": 2,
+   "status": 200,
+   "got": "ok",
+   "expect": "ok",
+   "pass": true,
+   "ms": 408,
+   "chunks": 5,
+   "pages": 1,
+   "warnings": [],
+   "message": null
+  },
+  {
+   "file": "t90_press_manual.pdf",
+   "kb": 103,
+   "status": 200,
+   "got": "ok",
+   "expect": "ok",
+   "pass": true,
+   "ms": 8077,
+   "chunks": 150,
+   "pages": 150,
+   "warnings": [],
+   "message": null
+  },
+  {
+   "file": "politica_teletrabajo.pdf",
+   "kb": 1,
+   "status": 200,
+   "got": "ok",
+   "expect": "ok",
+   "pass": true,
+   "ms": 157,
+   "chunks": 3,
+   "pages": 1,
+   "warnings": [],
+   "message": null
+  },
+  {
+   "file": "cangku_anquan.pdf",
+   "kb": 2,
+   "status": 422,
+   "got": "unsupported_language",
+   "expect": "unsupported_language",
+   "pass": true,
+   "ms": 102,
+   "chunks": null,
+   "pages": null,
+   "warnings": null,
+   "message": "DocLens currently supports documents written in English and other Latin-alphabet languages (such as Spanish, French, German or Portuguese). This file seems to be mostly in another script, so it can't be processed. Please upload another file."
+  },
+  {
+   "file": "karyalay_suchna.txt",
+   "kb": 0,
+   "status": 422,
+   "got": "unsupported_language",
+   "expect": "unsupported_language",
+   "pass": true,
+   "ms": 32,
+   "chunks": null,
+   "pages": null,
+   "warnings": null,
+   "message": "DocLens currently supports documents written in English and other Latin-alphabet languages (such as Spanish, French, German or Portuguese). This file seems to be mostly in another script, so it can't be processed. Please upload another file."
+  },
+  {
+   "file": "supplier_contacts.pdf",
+   "kb": 2,
+   "status": 200,
+   "got": "ok",
+   "expect": "ok",
+   "pass": true,
+   "ms": 139,
+   "chunks": 1,
+   "pages": 1,
+   "warnings": [],
+   "message": null
+  },
+  {
+   "file": "politiques.txt",
+   "kb": 0,
+   "status": 200,
+   "got": "ok",
+   "expect": "ok",
+   "pass": true,
+   "ms": 67,
+   "chunks": 1,
+   "pages": null,
+   "warnings": [],
+   "message": null
+  },
+  {
+   "file": "restricted_print_only.pdf",
+   "kb": 2,
+   "status": 200,
+   "got": "ok",
+   "expect": "ok",
+   "pass": true,
+   "ms": 115,
+   "chunks": 1,
+   "pages": 1,
+   "warnings": [],
+   "message": null
+  },
+  {
+   "file": "locked_aes256.pdf",
+   "kb": 2,
+   "status": 422,
+   "got": "encrypted",
+   "expect": "encrypted",
+   "pass": true,
+   "ms": 98,
+   "chunks": null,
+   "pages": null,
+   "warnings": null,
+   "message": "This file seems to be password-protected, so DocLens can't read it. Please upload a copy without a password, or another file."
+  },
+  {
+   "file": "locked_contract.docx",
+   "kb": 41,
+   "status": 422,
+   "got": "encrypted",
+   "expect": "encrypted",
+   "pass": true,
+   "ms": 6,
+   "chunks": null,
+   "pages": null,
+   "warnings": null,
+   "message": "This file seems to be password-protected, so DocLens can't read it. Please upload a copy without a password, or another file."
+  },
+  {
+   "file": "old_format.docx",
+   "kb": 2,
+   "status": 415,
+   "got": "type_mismatch",
+   "expect": "type_mismatch",
+   "pass": true,
+   "ms": 4,
+   "chunks": null,
+   "pages": null,
+   "warnings": null,
+   "message": "This looks like an old Word (.doc) file renamed to .docx. Open it in Word, save it as .docx, and upload it again."
+  },
+  {
+   "file": "equipment_register.pdf",
+   "kb": 51,
+   "status": 200,
+   "got": "ok",
+   "expect": "ok",
+   "pass": true,
+   "ms": 113,
+   "chunks": 1,
+   "pages": 3,
+   "warnings": [
+    "image_pages_skipped"
+   ],
+   "message": null
+  },
+  {
+   "file": "invoice_inv7731.pdf",
+   "kb": 1,
+   "status": 200,
+   "got": "ok",
+   "expect": "ok",
+   "pass": true,
+   "ms": 116,
+   "chunks": 1,
+   "pages": 1,
+   "warnings": [
+    "hidden_text_removed"
+   ],
+   "message": null
+  },
+  {
+   "file": "shipping_rates.docx",
+   "kb": 36,
+   "status": 200,
+   "got": "ok",
+   "expect": "ok",
+   "pass": true,
+   "ms": 104,
+   "chunks": 2,
+   "pages": null,
+   "warnings": [],
+   "message": null
+  },
+  {
+   "file": "scan_only.pdf",
+   "kb": 50,
+   "status": 422,
+   "got": "scanned",
+   "expect": "scanned",
+   "pass": true,
+   "ms": 87,
+   "chunks": null,
+   "pages": null,
+   "warnings": null,
+   "message": "This PDF is scanned images with no text layer, so there is nothing to read. Run it through OCR first (e.g. \"Save as searchable PDF\") and upload that."
+  },
+  {
+   "file": "locked.pdf",
+   "kb": 1,
+   "status": 422,
+   "got": "encrypted",
+   "expect": "encrypted",
+   "pass": true,
+   "ms": 84,
+   "chunks": null,
+   "pages": null,
+   "warnings": null,
+   "message": "This file seems to be password-protected, so DocLens can't read it. Please upload a copy without a password, or another file."
+  },
+  {
+   "file": "invoice.pdf",
+   "kb": 0,
+   "status": 415,
+   "got": "type_mismatch",
+   "expect": "type_mismatch",
+   "pass": true,
+   "ms": 4,
+   "chunks": null,
+   "pages": null,
+   "warnings": null,
+   "message": "This file is named .pdf but isn't a PDF."
+  },
+  {
+   "file": "bomb.docx",
+   "kb": 235,
+   "status": 415,
+   "got": "too_complex",
+   "expect": "too_complex",
+   "pass": true,
+   "ms": 8,
+   "chunks": null,
+   "pages": null,
+   "warnings": null,
+   "message": "This Word file expands to more data than we can process safely."
+  },
+  {
+   "file": "macro.docx",
+   "kb": 36,
+   "status": 415,
+   "got": "macro",
+   "expect": "macro",
+   "pass": true,
+   "ms": 5,
+   "chunks": null,
+   "pages": null,
+   "warnings": null,
+   "message": "Macro-enabled Word files aren't accepted. Save it as a normal .docx and try again."
+  }
+ ],
+ "questions": [
+  {
+   "file": "soil_moisture_paper.pdf",
+   "q": "What was the mean absolute error for clay soil after calibration?",
+   "answer": "The mean absolute error for clay soil after calibration was **2.8 volumetric percent** [1].",
+   "cited": [
+    "soil_moisture_paper.pdf"
+   ],
+   "pass": true,
+   "ms": 5682
+  },
+  {
+   "file": "soil_moisture_paper.pdf",
+   "q": "How much did each probe cost compared with a commercial TDR sensor?",
+   "answer": "Each probe cost **11 US dollars**, compared to **240 dollars** for a commercial TDR sensor [1].",
+   "cited": [
+    "soil_moisture_paper.pdf"
+   ],
+   "pass": true,
+   "ms": 1001
+  },
+  {
+   "file": "soil_moisture_paper.pdf",
+   "q": "Why did clay soils show the largest error?",
+   "answer": "Clay soils showed the largest error because of the **salinity sensitivity** of the probe's dielectric measurement [1].",
+   "cited": [
+    "soil_moisture_paper.pdf"
+   ],
+   "pass": true,
+   "ms": 1093
+  },
+  {
+   "file": "t90_press_manual.pdf",
+   "q": "What pressure should the T-90 hydraulic accumulator be recharged to, and with what gas?",
+   "answer": "The Model T-90 hydraulic accumulator should be recharged to **1,450 psi** using **dry nitrogen** [1].",
+   "cited": [
+    "t90_press_manual.pdf"
+   ],
+   "pass": true,
+   "ms": 1897
+  },
+  {
+   "file": "politica_teletrabajo.pdf",
+   "q": "¿Cuántos días por semana se puede teletrabajar?",
+   "answer": "Los empleados pueden teletrabajar hasta **tres días por semana**, siempre que cuenten con la aprobación de su responsable [1].",
+   "cited": [
+    "politica_teletrabajo.pdf"
+   ],
+   "pass": true,
+   "ms": 4074
+  },
+  {
+   "file": "politica_teletrabajo.pdf",
+   "q": "How much does Ferrum reimburse for internet each month?",
+   "answer": "Ferrum Logística reimburses **35 euros** per month for internet expenses [1].",
+   "cited": [
+    "politica_teletrabajo.pdf"
+   ],
+   "pass": true,
+   "ms": 2882
+  },
+  {
+   "file": "supplier_contacts.pdf",
+   "q": "What is the warranty period for imported parts?",
+   "answer": "The warranty period for all imported parts is **18 months** [1].",
+   "cited": [
+    "supplier_contacts.pdf"
+   ],
+   "pass": true,
+   "ms": 923
+  },
+  {
+   "file": "politiques.txt",
+   "q": "Combien de jours pour retourner un produit ?",
+   "answer": "Les clients peuvent retourner un produit sous **trente jours** [1].",
+   "cited": [
+    "politiques.txt"
+   ],
+   "pass": true,
+   "ms": 1297
+  },
+  {
+   "file": "restricted_print_only.pdf",
+   "q": "How many requests per minute does the Team plan allow?",
+   "answer": "The Team plan allows **600** requests per minute [1].",
+   "cited": [
+    "restricted_print_only.pdf"
+   ],
+   "pass": true,
+   "ms": 3112
+  },
+  {
+   "file": "equipment_register.pdf",
+   "q": "How long can laptops be kept, and what is the late fee?",
+   "answer": "Laptops must be returned within **30 days** [1], and late returns incur a daily fee of **5 dollars** [1].",
+   "cited": [
+    "equipment_register.pdf"
+   ],
+   "pass": true,
+   "ms": 12225
+  },
+  {
+   "file": "invoice_inv7731.pdf",
+   "q": "How much is due on invoice INV-7731?",
+   "answer": "The amount due on invoice INV-7731 is **4,860 dollars** [1].",
+   "cited": [
+    "invoice_inv7731.pdf"
+   ],
+   "pass": true,
+   "ms": 3505
+  },
+  {
+   "file": "shipping_rates.docx",
+   "q": "What is the Express rate for Zone B?",
+   "answer": "The Express rate for Zone B is **19.80 EUR** [1].",
+   "cited": [
+    "shipping_rates.docx"
+   ],
+   "pass": true,
+   "ms": 3692
+  },
+  {
+   "file": "shipping_rates.docx",
+   "q": "Is there a surcharge on Express shipments?",
+   "answer": "Yes, a fuel surcharge of **4%** applies to all Express shipments [1].",
+   "cited": [
+    "shipping_rates.docx"
+   ],
+   "pass": true,
+   "ms": 3330
+  }
+ ]
+}

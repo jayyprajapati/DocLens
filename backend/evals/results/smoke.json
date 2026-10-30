@@ -1,0 +1,255 @@
+{
+ "label": "smoke",
+ "model": "ollama_cloud/gpt-oss:20b",
+ "judge": "gpt-oss:120b",
+ "ingest": {
+  "aurora_api_guide.md": {
+   "status": "success",
+   "doc_id": "0cdf778e-91f8-415b-8cec-ba4b6d84ff1c",
+   "filename": "aurora_api_guide.md",
+   "chunk_count": 13,
+   "pages": null,
+   "duplicate": false,
+   "warnings": [],
+   "expires_at": 1793436644,
+   "thread_id": null,
+   "meta": {
+    "ingest_ms": 466
+   },
+   "ms": 473
+  },
+  "employee_handbook.md": {
+   "status": "success",
+   "doc_id": "64f95361-da9e-4c74-8aa2-1e6261f11368",
+   "filename": "employee_handbook.md",
+   "chunk_count": 11,
+   "pages": null,
+   "duplicate": false,
+   "warnings": [],
+   "expires_at": 1793436644,
+   "thread_id": null,
+   "meta": {
+    "ingest_ms": 295
+   },
+   "ms": 297
+  },
+  "returns_policy.md": {
+   "status": "success",
+   "doc_id": "760c5b16-420c-49f1-bd0b-e5891556f081",
+   "filename": "returns_policy.md",
+   "chunk_count": 8,
+   "pages": null,
+   "duplicate": false,
+   "warnings": [],
+   "expires_at": 1793436644,
+   "thread_id": null,
+   "meta": {
+    "ingest_ms": 216
+   },
+   "ms": 219
+  },
+  "q3_financial_report.docx": {
+   "status": "success",
+   "doc_id": "d0919610-6ae2-4521-bd19-3688c321cf1b",
+   "filename": "q3_financial_report.docx",
+   "chunk_count": 7,
+   "pages": null,
+   "duplicate": false,
+   "warnings": [],
+   "expires_at": 1793436644,
+   "thread_id": null,
+   "meta": {
+    "ingest_ms": 243
+   },
+   "ms": 246
+  },
+  "kestrel_postmortem.pdf": {
+   "status": "success",
+   "doc_id": "13d75184-c866-425a-a0dd-dd2d5d949fc5",
+   "filename": "kestrel_postmortem.pdf",
+   "chunk_count": 8,
+   "pages": 2,
+   "duplicate": false,
+   "warnings": [],
+   "expires_at": 1793436645,
+   "thread_id": null,
+   "meta": {
+    "ingest_ms": 488
+   },
+   "ms": 490
+  },
+  "vendor_notes.md": {
+   "status": "success",
+   "doc_id": "8274ca55-dbea-41b1-b706-22b1511b10c3",
+   "filename": "vendor_notes.md",
+   "chunk_count": 4,
+   "pages": null,
+   "duplicate": false,
+   "warnings": [
+    "possible_prompt_injection"
+   ],
+   "expires_at": 1793436645,
+   "thread_id": null,
+   "meta": {
+    "ingest_ms": 139
+   },
+   "ms": 142
+  },
+  "supplier_faq.md": {
+   "status": "success",
+   "doc_id": "39142b43-5701-42fe-ac7f-0c7b0ea6faa0",
+   "filename": "supplier_faq.md",
+   "chunk_count": 8,
+   "pages": null,
+   "duplicate": false,
+   "warnings": [
+    "possible_prompt_injection"
+   ],
+   "expires_at": 1793436645,
+   "thread_id": null,
+   "meta": {
+    "ingest_ms": 122
+   },
+   "ms": 124
+  },
+  "lease_agreement.md": {
+   "status": "success",
+   "doc_id": "289a27f9-5ddd-4400-bc46-2f7407f00df2",
+   "filename": "lease_agreement.md",
+   "chunk_count": 11,
+   "pages": null,
+   "duplicate": false,
+   "warnings": [],
+   "expires_at": 1793436645,
+   "thread_id": null,
+   "meta": {
+    "ingest_ms": 270
+   },
+   "ms": 272
+  },
+  "clinical_study_summary.md": {
+   "status": "success",
+   "doc_id": "fc5e47ee-714c-42a5-967b-2a250e3b8edc",
+   "filename": "clinical_study_summary.md",
+   "chunk_count": 6,
+   "pages": null,
+   "duplicate": false,
+   "warnings": [],
+   "expires_at": 1793436646,
+   "thread_id": null,
+   "meta": {
+    "ingest_ms": 182
+   },
+   "ms": 184
+  },
+  "drone_manual.md": {
+   "status": "success",
+   "doc_id": "a7336705-45ce-4181-812d-7eebca3462d4",
+   "filename": "drone_manual.md",
+   "chunk_count": 7,
+   "pages": null,
+   "duplicate": false,
+   "warnings": [
+    "possible_prompt_injection"
+   ],
+   "expires_at": 1793436646,
+   "thread_id": null,
+   "meta": {
+    "ingest_ms": 178
+   },
+   "ms": 180
+  }
+ },
+ "summary": {
+  "n": 1,
+  "overall_pass_pct": 100.0,
+  "answerable_pass_pct": 100.0,
+  "answer_content_only_pct": 100.0,
+  "citation_accuracy_pct": 100.0,
+  "abstention_pass_pct": null,
+  "false_abstain_pct": null,
+  "adversarial_pass_pct": null,
+  "faithfulness_pct": 100.0,
+  "latency_ms_p50": 5308,
+  "latency_ms_p95": 5308,
+  "by_category": {
+   "fact": "1/1"
+  },
+  "errors": 0
+ },
+ "by_split": {
+  "dev": {
+   "n": 1,
+   "overall_pass_pct": 100.0,
+   "answerable_pass_pct": 100.0,
+   "answer_content_only_pct": 100.0,
+   "citation_accuracy_pct": 100.0,
+   "abstention_pass_pct": null,
+   "false_abstain_pct": null,
+   "adversarial_pass_pct": null,
+   "faithfulness_pct": 100.0,
+   "latency_ms_p50": 5308,
+   "latency_ms_p95": 5308,
+   "by_category": {
+    "fact": "1/1"
+   },
+   "errors": 0
+  }
+ },
+ "results": [
+  {
+   "id": "fact-key-expiry",
+   "category": "fact",
+   "split": "dev",
+   "expect": "answer",
+   "question": "How long until an Aurora API key expires?",
+   "answer": "An Aurora API key expires after 90 days. [1]",
+   "error": null,
+   "wall_ms": 5308,
+   "meta": {
+    "retrieved_count": 6,
+    "retrieve_ms": 471,
+    "generate_ms": 1853,
+    "guardrails": [],
+    "model": "gpt-oss:20b",
+    "style": "balanced",
+    "queries": [
+     "How long until an Aurora API key expires?"
+    ],
+    "rewrite_ms": 0,
+    "top_score": 8.28,
+    "candidates": 20,
+    "verify_ms": 2969,
+    "evidence": {
+     "quoted": 1,
+     "verified": 1
+    },
+    "total_ms": 5304,
+    "mode": "byok"
+   },
+   "grounded": true,
+   "n_citations": 1,
+   "checks": {
+    "no_leak": true,
+    "content": true,
+    "cite_ok": true,
+    "cited": [
+     "aurora_api_guide.md"
+    ],
+    "faithful": true
+   },
+   "citations": [
+    {
+     "index": 1,
+     "filename": "aurora_api_guide.md",
+     "section": "Authentication",
+     "score": 8.282270431518555,
+     "text": "Every request must carry an API key in the `X-Aurora-Key` header. Keys beginning with `ak_test_` operate on the sandbox; keys beginning with `ak_live_` operate on production. Keys expire after 90 days and must be rotated from the Developer Console. Aurora does not support OAuth 2.0 client credentials in version 4; OAuth support is planned for version 5."
+    }
+   ],
+   "pass": true,
+   "content_pass": true,
+   "unsupported": []
+  }
+ ]
+}

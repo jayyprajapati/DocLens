@@ -45,7 +45,7 @@ function ChatWindow({ messages, onDocSelect, documents = [] }) {
                   <div className="empty-feature-copy">
                     <div className="empty-feature-title">Upload your documents</div>
                     <div className="empty-feature-desc">
-                      PDF, DOCX, or Markdown. Attach per-chat with the paperclip or add to Resources to share across all conversations.
+                      PDF, DOCX, Markdown or text, in English or another Latin-alphabet language. Attach per-chat with the paperclip or add to Resources to share across all conversations.
                     </div>
                   </div>
                 </div>
@@ -69,7 +69,7 @@ function ChatWindow({ messages, onDocSelect, documents = [] }) {
                   <div className="empty-feature-copy">
                     <div className="empty-feature-title">Every answer is cited</div>
                     <div className="empty-feature-desc">
-                      Each response includes the exact page, section, and passage it came from. Tap any marker to verify inline.
+                      Each answer names the document, section and passage it came from. Tap any marker to verify it inline.
                     </div>
                   </div>
                 </div>
@@ -79,9 +79,9 @@ function ChatWindow({ messages, onDocSelect, documents = [] }) {
                     <KeyRound size={19} aria-hidden="true" />
                   </span>
                   <div className="empty-feature-copy">
-                    <div className="empty-feature-title">Bring your own key</div>
+                    <div className="empty-feature-title">Free, or your own key</div>
                     <div className="empty-feature-desc">
-                      BYOK — choose OpenAI, Claude, or Ollama Cloud. Your key stays in your browser and never touches DocLens servers.
+                      Start free with no key, or bring your own OpenAI, Claude or Ollama Cloud key for unlimited use. Your key stays in your browser.
                     </div>
                   </div>
                 </div>

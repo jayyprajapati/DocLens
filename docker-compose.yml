@@ -22,6 +22,18 @@ services:
     env_file:
       - ./backend.env
     restart: unless-stopped
+    # Containment: this container parses untrusted uploads, and the box hosts other projects.
+    # Bounded CPU/RAM/processes, read-only root filesystem, no Linux capabilities, no privilege
+    # escalation. Uploaded files never touch disk (parsed from memory in a sandboxed child).
+    cpus: "1.0"
+    mem_limit: 900m  # the box has <1 GB headroom: API ~200 MB + one 512 MB parser
+    pids_limit: 256
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
     networks:
       - web # so the shared caddy can reach it (doclens-backend:8001)
       - data # so it can reach the shared mongo + the brain-backend container

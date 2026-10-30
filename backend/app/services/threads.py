@@ -75,7 +75,9 @@ def rename_thread(user_id: str, thread_id: str, title: str) -> dict | None:
     return _public(t) if t else None
 
 
-def add_message(thread_id: str, user_id: str, role: str, content: str, citations: list | None = None) -> dict:
+def add_message(
+    thread_id: str, user_id: str, role: str, content: str, citations: list | None = None, meta: dict | None = None
+) -> dict:
     doc = {
         "_id": str(uuid.uuid4()),
         "thread_id": thread_id,
@@ -85,6 +87,8 @@ def add_message(thread_id: str, user_id: str, role: str, content: str, citations
         "citations": citations or [],
         "created_at": _now(),
     }
+    if meta:
+        doc["meta"] = meta  # timings, guardrail flags, abstained/grounded — queryable later
     db.messages().insert_one(doc)
     return doc
 
@@ -105,6 +109,7 @@ def thread_messages(user_id: str, thread_id: str) -> list[dict]:
             "role": r.get("role"),
             "content": r.get("content", ""),
             "citations": r.get("citations", []),
+            "meta": r.get("meta"),
             "created_at": _epoch(r.get("created_at")),
         }
         for r in cursor

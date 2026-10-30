@@ -423,6 +423,16 @@ button { -webkit-tap-highlight-color: transparent; }
   line-height: 1.5;
 }
 
+.byok-hosted-note {
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text2, inherit);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .reset-divider {
   border: 0;
   border-top: 1px solid var(--border);
@@ -937,7 +947,8 @@ button { -webkit-tap-highlight-color: transparent; }
 
 .src-ul {
   margin: 0;
-  padding-left: 17px;
+  padding-left: 0;
+  list-style: none;
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -950,6 +961,7 @@ button { -webkit-tap-highlight-color: transparent; }
 }
 
 .src-page { color: var(--text3); }
+.src-num { color: var(--text3); font-variant-numeric: tabular-nums; margin-right: 2px; }
 
 .cit-sup-btn {
   all: unset;
@@ -995,6 +1007,7 @@ button { -webkit-tap-highlight-color: transparent; }
 
 .cit-drawer-close:hover { color: var(--text); }
 
+.cit-quote { background: color-mix(in srgb, var(--accent, #7c9cff) 28%, transparent); color: inherit; border-radius: 3px; padding: 0 2px; }
 .cit-drawer-text {
   margin: 0;
   color: var(--text2);
@@ -1324,6 +1337,16 @@ button { -webkit-tap-highlight-color: transparent; }
 .inline-feedback-warning { color: var(--amber); background: color-mix(in srgb, var(--amber) 7%, transparent); }
 .inline-feedback-error   { color: var(--red);   background: color-mix(in srgb, var(--red) 7%, transparent); }
 .inline-feedback-success { color: var(--green);  background: color-mix(in srgb, var(--green) 7%, transparent); }
+.inline-feedback-info    { color: var(--text2, inherit); background: color-mix(in srgb, var(--text3, #888) 7%, transparent); }
+
+.app-banner {
+  padding: 8px 18px;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--amber) 9%, transparent);
+  font-size: 13.5px;
+  line-height: 1.5;
+  text-align: center;
+}
 
 /* ── Footer ─────────────────────────────────────────────── */
 

@@ -21,7 +21,7 @@ function PrivacyPage() {
             This policy explains what DocLens processes, how document-grounded answers are produced,
             and the controls you have over files, chats, and API credentials.
           </p>
-          <p className="legal-meta">Last updated · March 2026</p>
+          <p className="legal-meta">Last updated · October 2026</p>
         </header>
 
         <div className="legal-summary" aria-label="Privacy summary">
@@ -58,7 +58,7 @@ function PrivacyPage() {
           <ul>
             <li>Uploaded PDF, DOCX, and Markdown content.</li>
             <li>Questions, cited answers, and conversation history.</li>
-            <li>Session identifiers and basic usage counters.</li>
+            <li>An anonymous session identifier, a one-way hash of your IP address, and usage counters.</li>
           </ul>
         </section>
 
@@ -73,6 +73,7 @@ function PrivacyPage() {
             <li>No advertising, resale, or profile building.</li>
             <li>Requests go only to the configured retrieval and model services.</li>
             <li>Usage state supports limits, deletion, and product operation.</li>
+            <li>Questions, answers, timings and upload outcomes are logged so the operator can measure answer quality and detect abuse. These logs contain no API keys or raw IP addresses and are deleted after 180 days.</li>
           </ul>
         </section>
 
@@ -82,9 +83,9 @@ function PrivacyPage() {
             <span className="legal-section-icon"><Timer size={18} aria-hidden="true" /></span>
             <h2>Retention and deletion</h2>
           </div>
-          <p>Uploaded documents are temporary and scheduled for removal after 24 hours.</p>
+          <p>Uploaded documents are temporary and are deleted automatically (by default 24 hours after upload): both the file&apos;s text index and its record.</p>
           <ul>
-            <li>Cleanup runs approximately hourly.</li>
+            <li>Cleanup runs every 10 minutes.</li>
             <li>Individual resources and conversations can be deleted sooner.</li>
             <li>Reset clears session history and uploaded documents.</li>
           </ul>
@@ -96,7 +97,7 @@ function PrivacyPage() {
             <span className="legal-section-icon"><KeyRound size={18} aria-hidden="true" /></span>
             <h2>Your API key</h2>
           </div>
-          <p>BYOK credentials stay in your browser session and authorize your selected provider.</p>
+          <p>BYOK credentials stay in your browser session and authorize your selected provider. In free mode no key is needed: answers run on DocLens&apos;s own model account.</p>
           <ul>
             <li>DocLens does not persist keys as permanent database records.</li>
             <li>Your provider’s billing and access policies still apply.</li>

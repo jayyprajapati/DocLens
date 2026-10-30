@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
-import { getUserId } from './services/auth'
+import { ensureSession, getUserId } from './services/auth'
+import { HOSTED } from './services/providers'
 import Header from './components/Header'
 import ChatWindow from './components/ChatWindow'
 import InputBar from './components/InputBar'
@@ -12,6 +13,7 @@ import {
   deleteDocument,
   deleteResource,
   deleteThread,
+  fetchPublicConfig,
   getDocuments,
   getThread,
   ingest,
@@ -65,7 +67,23 @@ function buildStages(defs) {
   }))
 }
 
+// What each upload warning means, in words a user can act on.
+const UPLOAD_WARNINGS = {
+  possible_prompt_injection: 'it contains text that reads like instructions to an AI. DocLens treats document text as data only, so those lines are ignored.',
+  hidden_text_removed: 'it contains hidden text (white, microscopic or off-page), which was ignored.',
+  truncated: 'it is longer than the upload limit, so only the first part was indexed.',
+  image_pages_skipped: 'some pages are scanned images with no text layer, so they could not be read.',
+  images_not_read: 'images and diagrams are not read, only its text and tables.',
+}
+
+function describeUploadWarnings(filename, warnings) {
+  const notes = (warnings || []).map((w) => UPLOAD_WARNINGS[w]).filter(Boolean)
+  if (!notes.length) return ''
+  return `Note on ${filename}: ${notes.join(' Also, ')}`
+}
+
 function getByokValidationMessage(apiKey, model, provider) {
+  if (provider === HOSTED) return ''
   const ok = [Boolean(apiKey.trim()), Boolean(model.trim()), Boolean(provider.trim())]
   if (ok.every(Boolean)) return ''
   const missing = []
@@ -204,7 +222,8 @@ function extractBestError(error) {
 }
 
 export default function App() {
-  const [userId]   = useState(() => getUserId())
+  const [userId, setUserId] = useState(() => getUserId())
+  const [appConfig, setAppConfig] = useState(null)
   const [apiKey, setApiKey]           = useState(() => localStorage.getItem(STORAGE_KEYS.apiKey) || '')
   const [selectedModel, setSelectedModel] = useState(() => localStorage.getItem(STORAGE_KEYS.selectedModel) || '')
   const [provider, setProvider]       = useState(() => localStorage.getItem(STORAGE_KEYS.provider) || '')
@@ -293,7 +312,39 @@ export default function App() {
     }
   }
 
-  useEffect(() => { refreshThreads() }, [userId])
+  const refreshConfig = async () => {
+    try {
+      const cfg = await fetchPublicConfig()
+      setAppConfig(cfg)
+      return cfg
+    } catch {
+      return null
+    }
+  }
+
+  // Start (or upgrade) the signed session, then load the server-driven config. Free mode is the
+  // default for anyone who hasn't picked a provider yet.
+  useEffect(() => {
+    let cancelled = false
+    ensureSession()
+      .catch(() => null)
+      .then(() => {
+        if (cancelled) return null
+        setUserId(getUserId())
+        return refreshConfig()
+      })
+      .then((cfg) => {
+        if (cancelled || !cfg) return
+        setProvider((current) => {
+          if (current === HOSTED && !cfg.hosted) return ''
+          if (!current && cfg.hosted) return HOSTED
+          return current
+        })
+      })
+    return () => { cancelled = true }
+  }, [])
+
+  useEffect(() => { if (userId) refreshThreads() }, [userId])
 
   // Load workspace resources on mount
   const loadResources = async () => {
@@ -310,11 +361,15 @@ export default function App() {
   const handleResourceUpload = async (file) => {
     if (!file) return
     setResourcesLoading(true)
+    setInlineFeedback(null)
     try {
-      await uploadResource(file)
+      const result = await uploadResource(file)
       await loadResources()
-    } catch {
-      // leave loading false, silent failure
+      const note = describeUploadWarnings(file.name, result?.warnings)
+      if (note) setInlineFeedback({ tone: 'warning', content: note })
+      else if (result?.duplicate) setInlineFeedback({ tone: 'info', content: `${file.name} is already in your resources.` })
+    } catch (error) {
+      setInlineFeedback({ tone: 'error', content: `${file.name}: ${extractBestError(error)}` })
     } finally {
       setResourcesLoading(false)
     }
@@ -508,6 +563,7 @@ export default function App() {
       failStages(timelineId, extractBestError(error))
     } finally {
       setLoadingState('idle')
+      if (provider === HOSTED) refreshConfig() // free questions left today
     }
   }
 
@@ -606,10 +662,6 @@ export default function App() {
 
   const handleUpload = async (file) => {
     if (!file || inputLocked) return
-    if (!isByokReady) {
-      setInlineFeedback({ tone: 'warning', content: byokValidationMessage })
-      return
-    }
     setInlineFeedback(null)
 
     const timelineId = uuidv4()
@@ -646,7 +698,11 @@ export default function App() {
       })
 
       const typeMeta = getDocumentTypeMeta(file.name)
-      setDocuments((prev) => [...prev, { id: uuidv4(), doc_id: docId, name: file.name, status: 'uploaded', ...typeMeta }])
+      if (!ingestResult?.duplicate || !documents.some((d) => d.doc_id === docId)) {
+        setDocuments((prev) => [...prev, { id: uuidv4(), doc_id: docId, name: file.name, status: 'uploaded', ...typeMeta }])
+      }
+      const note = describeUploadWarnings(file.name, ingestResult?.warnings)
+      if (note) addMessage({ id: uuidv4(), role: 'system', tone: 'warning', content: note })
     } catch (error) {
       failStages(timelineId, extractBestError(error))
     } finally {
@@ -706,6 +762,7 @@ export default function App() {
           model={selectedModel}
           provider={provider}
           byokValidationMessage={byokValidationMessage}
+          appConfig={appConfig}
           onApiKeyChange={setApiKey}
           onModelChange={setSelectedModel}
           onProviderChange={setProvider}
@@ -718,10 +775,13 @@ export default function App() {
         <div className="app-shell-main">
         <Header
           apiKey={apiKey} model={selectedModel} provider={provider}
-          byokValidationMessage={byokValidationMessage}
+          byokValidationMessage={byokValidationMessage} appConfig={appConfig}
           onApiKeyChange={setApiKey} onModelChange={setSelectedModel}
           onProviderChange={setProvider} onReset={handleReset}
         />
+        {appConfig?.banner && (
+          <div className="app-banner" role="status">{appConfig.banner}</div>
+        )}
         <ChatWindow
           messages={chat}
           onDocSelect={handleDocSelect}

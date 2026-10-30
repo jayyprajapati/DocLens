@@ -6,27 +6,9 @@ import {
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import './ThreadSidebar.css'
+import { API_KEY_PLACEHOLDER, HOSTED, hostedNote, modelSuggestions, providerOptions } from '../services/providers'
 
 const PORTFOLIO_URL = 'https://github.com/jayyprajapati'
-
-const PROVIDER_OPTIONS = [
-  { value: 'openai',       label: 'OpenAI' },
-  { value: 'anthropic',   label: 'Claude (Anthropic)' },
-  { value: 'ollama_cloud', label: 'Ollama Cloud' },
-]
-
-const MODEL_SUGGESTIONS = {
-  openai:       ['gpt-4o-mini', 'gpt-4o', 'gpt-4.1-mini', 'gpt-4.1', 'o4-mini'],
-  anthropic:    ['claude-sonnet-4-6', 'claude-opus-4-8', 'claude-haiku-4-5-20251001'],
-  ollama_cloud: ['gpt-oss:120b', 'gpt-oss:20b'],
-}
-
-const API_KEY_PLACEHOLDER = {
-  openai:       'sk-... (OpenAI key)',
-  anthropic:    'sk-ant-... (Anthropic key)',
-  ollama_cloud: 'Ollama Cloud key',
-  '':           'Select a provider first',
-}
 
 function formatRelativeTime(unixSeconds) {
   if (!unixSeconds) return ''
@@ -67,6 +49,7 @@ export default function ThreadSidebar({
   model = '',
   provider = '',
   byokValidationMessage = '',
+  appConfig = null,
   onApiKeyChange,
   onModelChange,
   onProviderChange,
@@ -299,14 +282,14 @@ export default function ThreadSidebar({
                     className="resource-upload-input"
                     onChange={handleResourceFileChange}
                     disabled={resourcesLoading}
-                    accept=".pdf,.docx,.md,.markdown"
+                    accept=".pdf,.docx,.md,.markdown,.txt"
                   />
                 </label>
               </div>
             </div>
             {resourcesLoading && <p className="resource-loading">Uploading…</p>}
             {!resourcesLoading && resources.length === 0 && (
-              <p className="resource-empty">Upload PDF, DOCX, or Markdown files here to access them in any chat.</p>
+              <p className="resource-empty">Upload PDF, DOCX, Markdown or text files here to use them in every chat.</p>
             )}
             {resources.length > 0 && (
               <ul className="resource-list">
@@ -350,13 +333,16 @@ export default function ThreadSidebar({
                   onChange={(e) => { onProviderChange?.(e.target.value); onModelChange?.('') }}
                 >
                   <option value="">Select provider</option>
-                  {PROVIDER_OPTIONS.map((opt) => (
+                  {providerOptions(appConfig).map((opt) => (
                     <option key={opt.value} value={opt.value}>{opt.label}</option>
                   ))}
                 </select>
               </div>
             </div>
 
+            {provider === HOSTED ? (
+              <p className="byok-hosted-note">{hostedNote(appConfig)}</p>
+            ) : (<>
             <div className="panel-field-group">
               <label className="field-label field-label-stack">API Key</label>
               <div className="control-row control-row-compact">
@@ -394,12 +380,14 @@ export default function ThreadSidebar({
                   onChange={(e) => onModelChange?.(e.target.value)}
                 />
                 <datalist id="sidebar-model-datalist">
-                  {(MODEL_SUGGESTIONS[provider] || []).map((m) => (
+                  {modelSuggestions(appConfig, provider).map((m) => (
                     <option key={m} value={m} />
                   ))}
                 </datalist>
               </div>
             </div>
+
+            </>)}
 
             {byokValidationMessage && (
               <p className="byok-inline-error" role="alert">{byokValidationMessage}</p>

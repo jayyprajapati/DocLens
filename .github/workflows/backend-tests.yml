@@ -1,0 +1,25 @@
+name: Backend Tests
+
+# Offline guardrail + grounding tests (no network, ~1s). The end-to-end accuracy eval needs a live
+# Brain and a BYOK key, so it is run manually before merging prompt/retrieval changes
+# (see EVALS.md) — this job is the always-on safety net.
+
+on:
+  push:
+    paths: ['backend/**', '.github/workflows/backend-tests.yml']
+  pull_request:
+    paths: ['backend/**', '.github/workflows/backend-tests.yml']
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: backend/requirements-dev.txt
+      - run: pip install -r backend/requirements-dev.txt
+      - run: python -m pytest tests -q
+        working-directory: backend

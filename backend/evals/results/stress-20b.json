@@ -1,0 +1,306 @@
+{
+ "model": "gpt-oss:20b",
+ "uploads": [
+  {
+   "file": "soil_moisture_paper.pdf",
+   "kb": 2,
+   "status": 200,
+   "got": "ok",
+   "expect": "ok",
+   "pass": true,
+   "ms": 562,
+   "chunks": 6,
+   "pages": 1,
+   "warnings": [],
+   "message": null
+  },
+  {
+   "file": "t90_press_manual.pdf",
+   "kb": 103,
+   "status": 200,
+   "got": "ok",
+   "expect": "ok",
+   "pass": true,
+   "ms": 8703,
+   "chunks": 150,
+   "pages": 150,
+   "warnings": [],
+   "message": null
+  },
+  {
+   "file": "politica_teletrabajo.pdf",
+   "kb": 1,
+   "status": 200,
+   "got": "ok",
+   "expect": "ok",
+   "pass": true,
+   "ms": 156,
+   "chunks": 3,
+   "pages": 1,
+   "warnings": [],
+   "message": null
+  },
+  {
+   "file": "cangku_anquan.pdf",
+   "kb": 2,
+   "status": 200,
+   "got": "ok",
+   "expect": "ok",
+   "pass": true,
+   "ms": 114,
+   "chunks": 0,
+   "pages": 1,
+   "warnings": [],
+   "message": null
+  },
+  {
+   "file": "karyalay_suchna.pdf",
+   "kb": 36,
+   "status": 200,
+   "got": "ok",
+   "expect": "ok",
+   "pass": true,
+   "ms": 136,
+   "chunks": 3,
+   "pages": 1,
+   "warnings": [],
+   "message": null
+  },
+  {
+   "file": "equipment_register.pdf",
+   "kb": 51,
+   "status": 200,
+   "got": "ok",
+   "expect": "ok",
+   "pass": true,
+   "ms": 118,
+   "chunks": 1,
+   "pages": 3,
+   "warnings": [
+    "image_pages_skipped"
+   ],
+   "message": null
+  },
+  {
+   "file": "invoice_inv7731.pdf",
+   "kb": 1,
+   "status": 200,
+   "got": "ok",
+   "expect": "ok",
+   "pass": true,
+   "ms": 120,
+   "chunks": 1,
+   "pages": 1,
+   "warnings": [
+    "hidden_text_removed"
+   ],
+   "message": null
+  },
+  {
+   "file": "shipping_rates.docx",
+   "kb": 36,
+   "status": 200,
+   "got": "ok",
+   "expect": "ok",
+   "pass": true,
+   "ms": 123,
+   "chunks": 3,
+   "pages": null,
+   "warnings": [],
+   "message": null
+  },
+  {
+   "file": "scan_only.pdf",
+   "kb": 50,
+   "status": 422,
+   "got": "scanned",
+   "expect": "scanned",
+   "pass": true,
+   "ms": 110,
+   "chunks": null,
+   "pages": null,
+   "warnings": null,
+   "message": "This PDF is scanned images with no text layer, so there is nothing to read. Run it through OCR first (e.g. \"Save as searchable PDF\") and upload that."
+  },
+  {
+   "file": "locked.pdf",
+   "kb": 1,
+   "status": 422,
+   "got": "encrypted",
+   "expect": "encrypted",
+   "pass": true,
+   "ms": 107,
+   "chunks": null,
+   "pages": null,
+   "warnings": null,
+   "message": "This PDF is password-protected. Remove the password and upload it again."
+  },
+  {
+   "file": "invoice.pdf",
+   "kb": 0,
+   "status": 415,
+   "got": "type_mismatch",
+   "expect": "type_mismatch",
+   "pass": true,
+   "ms": 4,
+   "chunks": null,
+   "pages": null,
+   "warnings": null,
+   "message": "This file is named .pdf but isn't a PDF."
+  },
+  {
+   "file": "bomb.docx",
+   "kb": 235,
+   "status": 415,
+   "got": "too_complex",
+   "expect": "too_complex",
+   "pass": true,
+   "ms": 6,
+   "chunks": null,
+   "pages": null,
+   "warnings": null,
+   "message": "This Word file expands to more data than we can process safely."
+  },
+  {
+   "file": "macro.docx",
+   "kb": 36,
+   "status": 415,
+   "got": "macro",
+   "expect": "macro",
+   "pass": true,
+   "ms": 5,
+   "chunks": null,
+   "pages": null,
+   "warnings": null,
+   "message": "Macro-enabled Word files aren't accepted. Save it as a normal .docx and try again."
+  }
+ ],
+ "questions": [
+  {
+   "file": "soil_moisture_paper.pdf",
+   "q": "What was the mean absolute error for clay soil after calibration?",
+   "answer": "The documents do not provide a specific mean absolute error value for clay soil after calibration. They mention overall calibrated error and that Table 1 contains the error by soil type, but the numeric value for clay is not given. [1]",
+   "cited": [
+    "soil_moisture_paper.pdf"
+   ],
+   "pass": false,
+   "ms": 3879
+  },
+  {
+   "file": "soil_moisture_paper.pdf",
+   "q": "How much did each probe cost compared with a commercial TDR sensor?",
+   "answer": "Each probe cost **11 US dollars**, compared with **240 US dollars** for a commercial TDR sensor. [1]",
+   "cited": [
+    "soil_moisture_paper.pdf"
+   ],
+   "pass": true,
+   "ms": 3978
+  },
+  {
+   "file": "soil_moisture_paper.pdf",
+   "q": "Why did clay soils show the largest error?",
+   "answer": "Clay soils showed the largest error because the probe’s dielectric measurement is sensitive to salinity, which affects clay soils more than other types. [1]",
+   "cited": [
+    "soil_moisture_paper.pdf"
+   ],
+   "pass": true,
+   "ms": 5117
+  },
+  {
+   "file": "t90_press_manual.pdf",
+   "q": "What pressure should the T-90 hydraulic accumulator be recharged to, and with what gas?",
+   "answer": "The T‑90 hydraulic accumulator should be recharged to **1,450 psi** using **dry nitrogen** [1].",
+   "cited": [
+    "t90_press_manual.pdf"
+   ],
+   "pass": true,
+   "ms": 3069
+  },
+  {
+   "file": "politica_teletrabajo.pdf",
+   "q": "¿Cuántos días por semana se puede teletrabajar?",
+   "answer": "Los empleados pueden teletrabajar hasta **tres días por semana** con la aprobación correspondiente. [1]",
+   "cited": [
+    "politica_teletrabajo.pdf"
+   ],
+   "pass": true,
+   "ms": 5125
+  },
+  {
+   "file": "politica_teletrabajo.pdf",
+   "q": "How much does Ferrum reimburse for internet each month?",
+   "answer": "Ferrum reimburses **35 euros per month** for internet expenses. [1]",
+   "cited": [
+    "politica_teletrabajo.pdf"
+   ],
+   "pass": true,
+   "ms": 7692
+  },
+  {
+   "file": "cangku_anquan.pdf",
+   "q": "冷库的温度是多少？",
+   "answer": "The documents do not mention the temperature of the cold storage.",
+   "cited": [],
+   "pass": false,
+   "ms": 3281
+  },
+  {
+   "file": "cangku_anquan.pdf",
+   "q": "What is the forklift speed limit in the warehouse notice?",
+   "answer": "I couldn't find anything about that in your documents. Try rephrasing, or add the document that covers it.",
+   "cited": [],
+   "pass": false,
+   "ms": 168
+  },
+  {
+   "file": "karyalay_suchna.pdf",
+   "q": "Where is visitor parking?",
+   "answer": "Visitor parking is in Lot C. [1]",
+   "cited": [
+    "karyalay_suchna.pdf"
+   ],
+   "pass": true,
+   "ms": 2641
+  },
+  {
+   "file": "equipment_register.pdf",
+   "q": "How long can laptops be kept, and what is the late fee?",
+   "answer": "Laptops may be kept for up to 30 days, and a late fee of $5 is charged for each day the laptop is returned after that period. [1]",
+   "cited": [
+    "equipment_register.pdf"
+   ],
+   "pass": true,
+   "ms": 5862
+  },
+  {
+   "file": "invoice_inv7731.pdf",
+   "q": "How much is due on invoice INV-7731?",
+   "answer": "The amount due on invoice INV-7731 is 4,860 dollars [1].",
+   "cited": [
+    "invoice_inv7731.pdf"
+   ],
+   "pass": true,
+   "ms": 4633
+  },
+  {
+   "file": "shipping_rates.docx",
+   "q": "What is the Express rate for Zone B?",
+   "answer": "The Express rate for Zone B is **19.80 EUR** [1].",
+   "cited": [
+    "shipping_rates.docx"
+   ],
+   "pass": true,
+   "ms": 5051
+  },
+  {
+   "file": "shipping_rates.docx",
+   "q": "Is there a surcharge on Express shipments?",
+   "answer": "Yes, there is a surcharge on Express shipments: a fuel surcharge of 4% applies to all Express shipments [1].",
+   "cited": [
+    "shipping_rates.docx"
+   ],
+   "pass": true,
+   "ms": 7179
+  }
+ ]
+}

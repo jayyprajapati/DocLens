@@ -1,0 +1,5 @@
+-r requirements.txt
+pytest>=8.0
+reportlab>=4.0
+mongomock>=4.1
+msoffcrypto-tool>=5.4

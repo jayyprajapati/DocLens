@@ -1,0 +1,38 @@
+# DocLens — LOCAL development datastore.
+#
+# Brings up a persistent, self-hosted Mongo (the same engine production uses on
+# the shared Hetzner /srv/infra stack) so local dev never points at MongoDB
+# Atlas or any other cloud cluster. Data survives container restarts via a
+# named volume — this is NOT a throwaway/ephemeral instance.
+#
+#     docker compose -f docker-compose.dev.yml up -d
+#
+# Then in backend/.env (local):
+#     MONGO_URI=mongodb://doclens:doclens@localhost:27019/doclens?authSource=admin
+#     MONGO_DB=doclens
+#
+# Port is shifted off the Mongo default (27017 — already in use locally by an
+# unrelated mongod) and off 27018 (already used by the sister Offrloop repo's
+# own dev Mongo) to 27019, so it doesn't clash with anything else running on
+# this machine.
+#
+# Production reaches its own separate Mongo (also self-hosted, on /srv/infra)
+# over the internal `data` Docker network as host "mongo" — this compose file
+# has no effect on and shares no data with that instance. See DEPLOYMENT.md.
+
+services:
+  mongo:
+    image: mongo:7
+    container_name: doclens-dev-mongo
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: doclens
+      MONGO_INITDB_ROOT_PASSWORD: doclens
+      MONGO_INITDB_DATABASE: doclens
+    ports:
+      - "27019:27017"
+    volumes:
+      - doclens-dev-mongo:/data/db
+
+volumes:
+  doclens-dev-mongo:

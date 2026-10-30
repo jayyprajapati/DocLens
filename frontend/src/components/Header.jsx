@@ -2,31 +2,14 @@ import { useEffect, useRef, useState } from 'react'
 import { Bot, ChevronDown, Eye, EyeOff, FileSearch, Info, KeyRound, RefreshCw, Settings2 } from 'lucide-react'
 import InfoModal from './InfoModal'
 import { fetchModels } from '../services/api'
-
-const PROVIDER_OPTIONS = [
-  { value: 'openai', label: 'OpenAI' },
-  { value: 'anthropic', label: 'Claude (Anthropic)' },
-  { value: 'ollama_cloud', label: 'Ollama Cloud' },
-]
-
-const MODEL_SUGGESTIONS = {
-  openai: ['gpt-4o-mini', 'gpt-4o', 'gpt-4.1-mini', 'gpt-4.1', 'o4-mini'],
-  anthropic: ['claude-sonnet-4-6', 'claude-opus-4-8', 'claude-haiku-4-5-20251001'],
-  ollama_cloud: ['gpt-oss:120b', 'gpt-oss:20b'],
-}
-
-const API_KEY_PLACEHOLDER = {
-  openai: 'sk-... (OpenAI key)',
-  anthropic: 'sk-ant-... (Anthropic key)',
-  ollama_cloud: 'Ollama Cloud key',
-  '': 'Select a provider first',
-}
+import { API_KEY_PLACEHOLDER, HOSTED, hostedNote, modelSuggestions as suggestionsFor, providerOptions } from '../services/providers'
 
 function Header({
   apiKey,
   model,
   provider,
   byokValidationMessage,
+  appConfig,
   onApiKeyChange,
   onModelChange,
   onProviderChange,
@@ -35,7 +18,7 @@ function Header({
   const [activeModal, setActiveModal] = useState(null)
   const [isApiKeyVisible, setIsApiKeyVisible] = useState(false)
   const [openDropdown, setOpenDropdown] = useState(null)
-  const [modelSuggestions, setModelSuggestions] = useState(MODEL_SUGGESTIONS[provider] || [])
+  const [modelSuggestions, setModelSuggestions] = useState(() => suggestionsFor(appConfig, provider))
   const [isFetchingModels, setIsFetchingModels] = useState(false)
   const [modelFetchError, setModelFetchError] = useState(null)
   const byokDropdownRef = useRef(null)
@@ -43,9 +26,9 @@ function Header({
   const closeModal = () => setActiveModal(null)
 
   useEffect(() => {
-    setModelSuggestions(MODEL_SUGGESTIONS[provider] || [])
+    setModelSuggestions(suggestionsFor(appConfig, provider))
     setModelFetchError(null)
-  }, [provider])
+  }, [provider, appConfig])
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -110,13 +93,16 @@ function Header({
             }}
           >
             <option value="">Select provider</option>
-            {PROVIDER_OPTIONS.map((opt) => (
+            {providerOptions(appConfig).map((opt) => (
               <option key={opt.value} value={opt.value}>{opt.label}</option>
             ))}
           </select>
         </div>
       </div>
 
+      {provider === HOSTED ? (
+        <p className="byok-hosted-note">{hostedNote(appConfig)}</p>
+      ) : (<>
       <div className="panel-field-group">
         <div className="panel-label-row">
           <label htmlFor={`api-key-input${idSuffix}`} className="field-label">API Key</label>
@@ -209,6 +195,8 @@ function Header({
         )}
       </div>
 
+      </>)}
+
       {byokValidationMessage && (
         <p className="byok-inline-error" role="alert">
           {byokValidationMessage}
@@ -261,13 +249,16 @@ function Header({
       </header>
 
       <InfoModal isOpen={activeModal === 'byok'} onClose={closeModal} title="Provider &amp; API Key">
-        <p>DocLens requires your own API key. Select the provider that matches your key:</p>
+        {appConfig?.hosted && (
+          <p><strong>{appConfig.hosted.label}</strong> works without a key: answers run on DocLens&apos;s own model with a daily limit of {appConfig.hosted.daily_limit} questions. For unlimited use, bring your own key:</p>
+        )}
+        {!appConfig?.hosted && <p>DocLens uses your own API key. Select the provider that matches your key:</p>}
         <ul>
           <li><strong>OpenAI</strong> — key from <strong>platform.openai.com</strong> (starts with <code>sk-</code>).</li>
           <li><strong>Claude (Anthropic)</strong> — key from <strong>console.anthropic.com</strong> (starts with <code>sk-ant-</code>).</li>
           <li><strong>Ollama Cloud</strong> — key from <strong>ollama.com</strong>.</li>
         </ul>
-        <p>Your key is stored only in your browser and is sent per request to power your chats — it is never saved to any DocLens or Brain server, and there is no shared fallback key. It is cleared when you reset your session.</p>
+        <p>Your key is stored only in your browser and is sent per request to power your chats — it is never saved to any DocLens or Brain server. It is cleared when you reset your session.</p>
       </InfoModal>
 
       <InfoModal isOpen={activeModal === 'model'} onClose={closeModal} title="About Models">
@@ -279,10 +270,7 @@ function Header({
           <li><code>gpt-4.1-mini</code> / <code>gpt-4.1</code> — latest generation.</li>
           <li><code>o4-mini</code> — reasoning-focused.</li>
         </ul>
-        <p><strong>Ollama Cloud</strong> — billed to your Ollama account:</p>
-        <ul>
-          <li><code>gpt-oss:120b</code> — confirmed default model. Click the refresh icon to see all models available in your account.</li>
-        </ul>
+        <p><strong>Ollama Cloud</strong> — billed to your Ollama account. Click the refresh icon to see every model your account can use.</p>
       </InfoModal>
 
       <InfoModal

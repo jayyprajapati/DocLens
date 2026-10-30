@@ -67,20 +67,6 @@ function formatSection(raw) {
   return first.length > MAX_SECTION_LEN ? `${first.slice(0, MAX_SECTION_LEN - 1)}…` : first || 'Untitled'
 }
 
-function getSourceKey(source) {
-  return `${(source?.section || '').trim()}||${source?.page ?? ''}`
-}
-
-function deduplicateSources(sources) {
-  const seen = new Set()
-  return sources.filter((s) => {
-    const k = getSourceKey(s)
-    if (seen.has(k)) return false
-    seen.add(k)
-    return true
-  })
-}
-
 // ─── sub-components ─────────────────────────────────────────────────────────
 
 function CopyButton({ text }) {
@@ -102,23 +88,27 @@ function CopyButton({ text }) {
   )
 }
 
+// One entry per source, numbered like the [n] markers in the answer (the backend already merges
+// passages from the same section of the same document, so nothing here is a duplicate).
 function SourceList({ sources }) {
-  const deduped = deduplicateSources(sources)
-  if (!deduped.length) return null
+  if (!sources?.length) return null
   return (
     <div className="src-list" aria-label="Sources">
       <div className="src-label">Sources</div>
-      <ul className="src-ul">
-        {deduped.map((s, i) => {
-          const section = formatSection(s?.section)
+      <ol className="src-ul">
+        {sources.map((s, i) => {
+          const file = s?.filename || ''
+          const section = s?.section && s.section !== file ? formatSection(s.section) : ''
           const page = s?.page != null ? `p.${s.page}` : null
           return (
-            <li key={`${section}--${i}`} className="src-item">
-              {section}{page && <span className="src-page"> · {page}</span>}
+            <li key={`${s?.doc_id || file}-${i}`} className="src-item">
+              <span className="src-num">[{s?.index ?? i + 1}]</span> {file || formatSection(s?.section)}
+              {section && <span className="src-page"> · {section}</span>}
+              {page && <span className="src-page"> · {page}</span>}
             </li>
           )
         })}
-      </ul>
+      </ol>
     </div>
   )
 }

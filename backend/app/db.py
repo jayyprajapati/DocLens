@@ -11,6 +11,13 @@ with other apps):
 
 Brain holds none of this — it only stores vectors keyed by namespace=user_id and
 doc_id. The mapping of doc_id → filename/scope/thread lives here.
+
+Operational collections (read by the admin panel through /internal/admin):
+
+  - ``doclens_settings`` — one doc ``_id="runtime"``: live, admin-editable settings (runtime.py)
+  - ``doclens_events``   — usage analytics (chat / upload / delete / session / rejected …),
+                           expired by a TTL index after EVENTS_RETENTION_DAYS
+  - ``doclens_usage``    — daily quota counters (hosted-mode chats, uploads), TTL-expired
 """
 from __future__ import annotations
 
@@ -49,6 +56,18 @@ def documents():
     return get_db()["doclens_documents"]
 
 
+def settings_coll():
+    return get_db()["doclens_settings"]
+
+
+def events():
+    return get_db()["doclens_events"]
+
+
+def usage():
+    return get_db()["doclens_usage"]
+
+
 def ensure_indexes() -> None:
     """Create the indexes the queries rely on. Best-effort — a transient Mongo
     outage at startup must not crash the app."""
@@ -57,5 +76,10 @@ def ensure_indexes() -> None:
         messages().create_index([("thread_id", ASCENDING), ("created_at", ASCENDING)])
         documents().create_index([("user_id", ASCENDING), ("scope", ASCENDING)])
         documents().create_index([("thread_id", ASCENDING)])
+        documents().create_index([("created_at", ASCENDING)])
+        events().create_index([("ts", ASCENDING)], expireAfterSeconds=settings.events_retention_days * 86400)
+        events().create_index([("kind", ASCENDING), ("ts", DESCENDING)])
+        events().create_index([("user", ASCENDING), ("ts", DESCENDING)])
+        usage().create_index([("expires_at", ASCENDING)], expireAfterSeconds=0)
     except Exception as exc:  # noqa: BLE001
         logger.warning("could not create Mongo indexes (will retry lazily): %s", exc)

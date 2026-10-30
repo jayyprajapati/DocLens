@@ -1,0 +1,324 @@
+{
+ "label": "rep-sites",
+ "model": "ollama_cloud/gpt-oss:20b",
+ "judge": "gpt-oss:120b",
+ "ingest": {
+  "aurora_api_guide.md": {
+   "status": "success",
+   "doc_id": "5920fb4a-e796-4776-bf91-3c2124fabe4c",
+   "filename": "aurora_api_guide.md",
+   "chunk_count": 13,
+   "pages": null,
+   "duplicate": false,
+   "warnings": [],
+   "expires_at": 1793437101,
+   "thread_id": null,
+   "meta": {
+    "ingest_ms": 444
+   },
+   "ms": 449
+  },
+  "employee_handbook.md": {
+   "status": "success",
+   "doc_id": "d0493e7b-fde1-45aa-9df7-05c89754d9a4",
+   "filename": "employee_handbook.md",
+   "chunk_count": 11,
+   "pages": null,
+   "duplicate": false,
+   "warnings": [],
+   "expires_at": 1793437101,
+   "thread_id": null,
+   "meta": {
+    "ingest_ms": 322
+   },
+   "ms": 325
+  },
+  "returns_policy.md": {
+   "status": "success",
+   "doc_id": "2ee59f39-e867-47bc-a3c4-1dbb7fca42a2",
+   "filename": "returns_policy.md",
+   "chunk_count": 8,
+   "pages": null,
+   "duplicate": false,
+   "warnings": [],
+   "expires_at": 1793437102,
+   "thread_id": null,
+   "meta": {
+    "ingest_ms": 264
+   },
+   "ms": 267
+  },
+  "q3_financial_report.docx": {
+   "status": "success",
+   "doc_id": "1894c4a9-a842-4c67-aea0-c5bd373a022e",
+   "filename": "q3_financial_report.docx",
+   "chunk_count": 7,
+   "pages": null,
+   "duplicate": false,
+   "warnings": [],
+   "expires_at": 1793437102,
+   "thread_id": null,
+   "meta": {
+    "ingest_ms": 244
+   },
+   "ms": 247
+  },
+  "kestrel_postmortem.pdf": {
+   "status": "success",
+   "doc_id": "0f1ee427-f83e-43b0-a7d1-1d3e67485448",
+   "filename": "kestrel_postmortem.pdf",
+   "chunk_count": 8,
+   "pages": 2,
+   "duplicate": false,
+   "warnings": [],
+   "expires_at": 1793437103,
+   "thread_id": null,
+   "meta": {
+    "ingest_ms": 595
+   },
+   "ms": 598
+  },
+  "vendor_notes.md": {
+   "status": "success",
+   "doc_id": "eacf951e-b679-4d7b-a9c1-bd5c67af2923",
+   "filename": "vendor_notes.md",
+   "chunk_count": 4,
+   "pages": null,
+   "duplicate": false,
+   "warnings": [
+    "possible_prompt_injection"
+   ],
+   "expires_at": 1793437103,
+   "thread_id": null,
+   "meta": {
+    "ingest_ms": 220
+   },
+   "ms": 223
+  },
+  "supplier_faq.md": {
+   "status": "success",
+   "doc_id": "1549cf9d-94dc-4c6d-9511-be229048483d",
+   "filename": "supplier_faq.md",
+   "chunk_count": 8,
+   "pages": null,
+   "duplicate": false,
+   "warnings": [
+    "possible_prompt_injection"
+   ],
+   "expires_at": 1793437103,
+   "thread_id": null,
+   "meta": {
+    "ingest_ms": 123
+   },
+   "ms": 126
+  },
+  "lease_agreement.md": {
+   "status": "success",
+   "doc_id": "c4a2f513-59c5-4146-909d-e6eafc488f20",
+   "filename": "lease_agreement.md",
+   "chunk_count": 11,
+   "pages": null,
+   "duplicate": false,
+   "warnings": [],
+   "expires_at": 1793437103,
+   "thread_id": null,
+   "meta": {
+    "ingest_ms": 257
+   },
+   "ms": 260
+  },
+  "clinical_study_summary.md": {
+   "status": "success",
+   "doc_id": "e162b8d9-4ad4-4c98-aa05-fc1e473c12c1",
+   "filename": "clinical_study_summary.md",
+   "chunk_count": 6,
+   "pages": null,
+   "duplicate": false,
+   "warnings": [],
+   "expires_at": 1793437103,
+   "thread_id": null,
+   "meta": {
+    "ingest_ms": 190
+   },
+   "ms": 193
+  },
+  "drone_manual.md": {
+   "status": "success",
+   "doc_id": "66a38919-15b2-4300-b74b-6964ba0e0c3b",
+   "filename": "drone_manual.md",
+   "chunk_count": 7,
+   "pages": null,
+   "duplicate": false,
+   "warnings": [
+    "possible_prompt_injection"
+   ],
+   "expires_at": 1793437104,
+   "thread_id": null,
+   "meta": {
+    "ingest_ms": 202
+   },
+   "ms": 205
+  }
+ },
+ "summary": {
+  "n": 2,
+  "overall_pass_pct": 50.0,
+  "answerable_pass_pct": 50.0,
+  "answer_content_only_pct": 50.0,
+  "citation_accuracy_pct": 100.0,
+  "abstention_pass_pct": null,
+  "false_abstain_pct": null,
+  "adversarial_pass_pct": null,
+  "faithfulness_pct": 100.0,
+  "latency_ms_p50": 6933,
+  "latency_ms_p95": 6220,
+  "by_category": {
+   "fact": "1/2"
+  },
+  "errors": 0
+ },
+ "by_split": {
+  "test": {
+   "n": 1,
+   "overall_pass_pct": 100.0,
+   "answerable_pass_pct": 100.0,
+   "answer_content_only_pct": 100.0,
+   "citation_accuracy_pct": 100.0,
+   "abstention_pass_pct": null,
+   "false_abstain_pct": null,
+   "adversarial_pass_pct": null,
+   "faithfulness_pct": 100.0,
+   "latency_ms_p50": 6220,
+   "latency_ms_p95": 6220,
+   "by_category": {
+    "fact": "1/1"
+   },
+   "errors": 0
+  },
+  "holdout2": {
+   "n": 1,
+   "overall_pass_pct": 0.0,
+   "answerable_pass_pct": 0.0,
+   "answer_content_only_pct": 0.0,
+   "citation_accuracy_pct": null,
+   "abstention_pass_pct": null,
+   "false_abstain_pct": null,
+   "adversarial_pass_pct": null,
+   "faithfulness_pct": null,
+   "latency_ms_p50": 7646,
+   "latency_ms_p95": 7646,
+   "by_category": {
+    "fact": "0/1"
+   },
+   "errors": 0
+  }
+ },
+ "results": [
+  {
+   "id": "fact-pm-author",
+   "category": "fact",
+   "split": "test",
+   "expect": "answer",
+   "question": "Who wrote the Kestrel postmortem?",
+   "answer": "Priya Raman wrote the Kestrel postmortem. [1]",
+   "error": null,
+   "wall_ms": 6220,
+   "meta": {
+    "retrieved_count": 6,
+    "retrieve_ms": 613,
+    "generate_ms": 2805,
+    "guardrails": [],
+    "model": "gpt-oss:20b",
+    "style": "balanced",
+    "queries": [
+     "Who wrote the Kestrel postmortem?"
+    ],
+    "rewrite_ms": 0,
+    "top_score": 5.06,
+    "candidates": 20,
+    "verify_ms": 2788,
+    "evidence": {
+     "quoted": 1,
+     "verified": 1
+    },
+    "total_ms": 6215,
+    "mode": "byok"
+   },
+   "grounded": true,
+   "n_citations": 1,
+   "checks": {
+    "no_leak": true,
+    "content": true,
+    "cite_ok": true,
+    "cited": [
+     "kestrel_postmortem.pdf"
+    ],
+    "faithful": true
+   },
+   "citations": [
+    {
+     "index": 1,
+     "filename": "kestrel_postmortem.pdf",
+     "section": "Incident Postmortem: Kestrel Database Failover (INC-2291)",
+     "score": 5.063629627227783,
+     "text": "Date of incident: September 14, 2026. Severity: SEV-1. Author: Priya Raman, Site Reliability\nEngineering."
+    }
+   ],
+   "pass": true,
+   "content_pass": true,
+   "unsupported": []
+  },
+  {
+   "id": "g-study-sites",
+   "category": "fact",
+   "split": "holdout2",
+   "expect": "answer",
+   "question": "Where was the trial run and at how many sites?",
+   "answer": "The trial was conducted in northern Europe. The documents do not specify how many sites were involved. [1]",
+   "error": null,
+   "wall_ms": 7646,
+   "meta": {
+    "retrieved_count": 6,
+    "retrieve_ms": 772,
+    "generate_ms": 3676,
+    "guardrails": [],
+    "model": "gpt-oss:20b",
+    "style": "balanced",
+    "queries": [
+     "trial run location and number of sites involved in the trial run"
+    ],
+    "rewrite_ms": 951,
+    "top_score": -4.41,
+    "candidates": 20,
+    "verify_ms": 2238,
+    "evidence": {
+     "quoted": 1,
+     "verified": 1
+    },
+    "total_ms": 7643,
+    "mode": "byok"
+   },
+   "grounded": true,
+   "n_citations": 1,
+   "checks": {
+    "no_leak": true,
+    "content": false,
+    "cite_ok": true,
+    "cited": [
+     "clinical_study_summary.md"
+    ]
+   },
+   "citations": [
+    {
+     "index": 1,
+     "filename": "clinical_study_summary.md",
+     "section": "Limitations",
+     "score": -4.406369209289551,
+     "text": "The trial excluded participants with bipolar disorder and those taking photosensitizing medication. Follow-up ended at week 8, so durability beyond two months is unknown. The sites were all in northern Europe, which may limit generalizability to lower latitudes."
+    }
+   ],
+   "pass": false,
+   "content_pass": false
+  }
+ ]
+}
